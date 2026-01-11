@@ -13,13 +13,57 @@ from src.utils.value_extractor import (
 
 logger = logging.getLogger(__name__)
 
-IntentType = Literal["credit_limit", "request_increase", "exchange_rate", "interview", "other"]
+IntentType = Literal[
+    "credit_limit", "request_increase", "exchange_rate", "interview", "other"
+]
 
 INTENT_KEYWORDS: dict[IntentType, list[str]] = {
-    "credit_limit": ["limite", "credito", "crédito", "credit", "limit", "saldo", "quanto tenho", "meu limite", "disponível", "disponivel"],
-    "request_increase": ["aumento", "aumentar", "increase", "mais limite", "subir limite", "elevar", "solicitar aumento", "pedir aumento"],
-    "exchange_rate": ["cambio", "câmbio", "dolar", "dólar", "euro", "moeda", "cotacao", "cotação", "exchange", "currency", "converter"],
-    "interview": ["entrevista", "interview", "questionario", "questionário", "cadastro", "perfil", "atualizar dados", "informacoes", "informações"],
+    "credit_limit": [
+        "limite",
+        "credito",
+        "crédito",
+        "credit",
+        "limit",
+        "saldo",
+        "quanto tenho",
+        "meu limite",
+        "disponível",
+        "disponivel",
+    ],
+    "request_increase": [
+        "aumento",
+        "aumentar",
+        "increase",
+        "mais limite",
+        "subir limite",
+        "elevar",
+        "solicitar aumento",
+        "pedir aumento",
+    ],
+    "exchange_rate": [
+        "cambio",
+        "câmbio",
+        "dolar",
+        "dólar",
+        "euro",
+        "moeda",
+        "cotacao",
+        "cotação",
+        "exchange",
+        "currency",
+        "converter",
+    ],
+    "interview": [
+        "entrevista",
+        "interview",
+        "questionario",
+        "questionário",
+        "cadastro",
+        "perfil",
+        "atualizar dados",
+        "informacoes",
+        "informações",
+    ],
 }
 
 
@@ -30,16 +74,31 @@ class NaturalLanguageParser:
         value = extract_monetary_value(text)
         if value is not None:
             if value < 0:
-                return None, "O valor da renda não pode ser negativo. Qual é sua renda mensal?"
+                return (
+                    None,
+                    "O valor da renda não pode ser negativo. Qual é sua renda mensal?",
+                )
             if value > 1_000_000:
-                return None, "Esse valor parece muito alto. Poderia confirmar sua renda mensal?"
+                return (
+                    None,
+                    "Esse valor parece muito alto. Poderia confirmar sua renda mensal?",
+                )
             return value, ""
 
         normalized = normalize_text(text)
-        if any(p in normalized for p in ["nao sei", "nao tenho certeza", "nao lembro", "incerto"]):
-            return None, "Tudo bem! Pode ser um valor aproximado. Quanto você recebe por mês? Ex: 3 mil, 5k, ou 8000."
+        if any(
+            p in normalized
+            for p in ["nao sei", "nao tenho certeza", "nao lembro", "incerto"]
+        ):
+            return (
+                None,
+                "Tudo bem! Pode ser um valor aproximado. Quanto você recebe por mês? Ex: 3 mil, 5k, ou 8000.",
+            )
 
-        return None, "Não consegui identificar o valor. Informe sua renda, ex: 5000, 5k, ou cinco mil."
+        return (
+            None,
+            "Não consegui identificar o valor. Informe sua renda, ex: 5000, 5k, ou cinco mil.",
+        )
 
     @staticmethod
     def parse_expenses(text: str) -> tuple[Optional[float], str]:
@@ -48,14 +107,25 @@ class NaturalLanguageParser:
             if value < 0:
                 return None, "O valor das despesas não pode ser negativo."
             if value > 500_000:
-                return None, "Esse valor parece muito alto. Poderia confirmar suas despesas mensais?"
+                return (
+                    None,
+                    "Esse valor parece muito alto. Poderia confirmar suas despesas mensais?",
+                )
             return value, ""
 
         normalized = normalize_text(text)
-        if any(p in normalized for p in ["nao sei", "nao tenho ideia", "dificil dizer"]):
-            return None, "Entendo. Tente pensar no total aproximado (aluguel, contas, alimentação, etc). Qual seria?"
+        if any(
+            p in normalized for p in ["nao sei", "nao tenho ideia", "dificil dizer"]
+        ):
+            return (
+                None,
+                "Entendo. Tente pensar no total aproximado (aluguel, contas, alimentação, etc). Qual seria?",
+            )
 
-        return None, "Não consegui identificar o valor das despesas. Qual o total aproximado? Ex: 2000, 2k."
+        return (
+            None,
+            "Não consegui identificar o valor das despesas. Qual o total aproximado? Ex: 2000, 2k.",
+        )
 
     @staticmethod
     def parse_employment_type(text: str) -> tuple[Optional[str], str]:
@@ -65,9 +135,15 @@ class NaturalLanguageParser:
 
         normalized = normalize_text(text)
         if any(p in normalized for p in ["nao sei", "nao tenho certeza", "como assim"]):
-            return None, "Opções: CLT (carteira assinada), Servidor Público, Autônomo/Freelancer, MEI, ou Desempregado. Qual é a sua?"
+            return (
+                None,
+                "Opções: CLT (carteira assinada), Servidor Público, Autônomo/Freelancer, MEI, ou Desempregado. Qual é a sua?",
+            )
 
-        return None, "Qual seu tipo de trabalho? CLT, autônomo, MEI, servidor público ou desempregado?"
+        return (
+            None,
+            "Qual seu tipo de trabalho? CLT, autônomo, MEI, servidor público ou desempregado?",
+        )
 
     @staticmethod
     def parse_dependents(text: str) -> tuple[Optional[int], str]:
@@ -80,10 +156,19 @@ class NaturalLanguageParser:
             return value, ""
 
         normalized = normalize_text(text)
-        if any(p in normalized for p in ["o que e", "como assim", "nao entendi", "dependente"]):
-            return None, "Dependentes são pessoas que dependem financeiramente de você (filhos, cônjuge, pais). Quantos você tem?"
+        if any(
+            p in normalized
+            for p in ["o que e", "como assim", "nao entendi", "dependente"]
+        ):
+            return (
+                None,
+                "Dependentes são pessoas que dependem financeiramente de você (filhos, cônjuge, pais). Quantos você tem?",
+            )
 
-        return None, "Quantas pessoas dependem financeiramente de você? Se nenhuma, diga 'zero'."
+        return (
+            None,
+            "Quantas pessoas dependem financeiramente de você? Se nenhuma, diga 'zero'.",
+        )
 
     @staticmethod
     def parse_has_debts(text: str) -> tuple[Optional[bool], str]:
@@ -92,8 +177,13 @@ class NaturalLanguageParser:
             return value, ""
 
         normalized = normalize_text(text)
-        if any(p in normalized for p in ["nao sei", "acho que", "talvez", "nao lembro"]):
-            return None, "Considere dívidas como: cartão atrasado, empréstimos, nome sujo. Você tem alguma? Sim ou não."
+        if any(
+            p in normalized for p in ["nao sei", "acho que", "talvez", "nao lembro"]
+        ):
+            return (
+                None,
+                "Considere dívidas como: cartão atrasado, empréstimos, nome sujo. Você tem alguma? Sim ou não.",
+            )
 
         return None, "Você tem alguma dívida em aberto? Responda sim ou não."
 
@@ -115,7 +205,10 @@ class NaturalLanguageParser:
         if code is not None:
             return code, ""
 
-        return None, "Informe a moeda: USD (dólar), EUR (euro), GBP (libra), JPY (iene), ou ARS (peso argentino)."
+        return (
+            None,
+            "Informe a moeda: USD (dólar), EUR (euro), GBP (libra), JPY (iene), ou ARS (peso argentino).",
+        )
 
 
 class LLMService:
@@ -136,6 +229,7 @@ class LLMService:
 
             if self._settings.llm_provider == "openai":
                 from langchain_openai import ChatOpenAI
+
                 llm = ChatOpenAI(
                     api_key=self._settings.openai_api_key,
                     temperature=self._settings.llm_temperature,
@@ -143,6 +237,7 @@ class LLMService:
                 )
             else:
                 from langchain_anthropic import ChatAnthropic
+
                 llm = ChatAnthropic(
                     api_key=self._settings.anthropic_api_key,
                     temperature=self._settings.llm_temperature,
@@ -179,9 +274,19 @@ Responda apenas o nome da intenção."""
                 return None
 
             result = await self._chain.ainvoke({"message": message})
-            output = (result.content if hasattr(result, "content") else str(result)).strip().lower()
+            output = (
+                (result.content if hasattr(result, "content") else str(result))
+                .strip()
+                .lower()
+            )
 
-            valid_intents: list[IntentType] = ["credit_limit", "request_increase", "exchange_rate", "interview", "other"]
+            valid_intents: list[IntentType] = [
+                "credit_limit",
+                "request_increase",
+                "exchange_rate",
+                "interview",
+                "other",
+            ]
             if output in valid_intents:
                 logger.info(f"LangChain intent: {output}")
                 return output
@@ -194,7 +299,12 @@ Responda apenas o nome da intenção."""
     def _classify_with_rules(self, message: str) -> IntentType | None:
         normalized = re.sub(r"[^\w\s]", " ", message.lower())
 
-        scores: dict[IntentType, int] = {"credit_limit": 0, "request_increase": 0, "exchange_rate": 0, "interview": 0}
+        scores: dict[IntentType, int] = {
+            "credit_limit": 0,
+            "request_increase": 0,
+            "exchange_rate": 0,
+            "interview": 0,
+        }
 
         for intent, keywords in INTENT_KEYWORDS.items():
             for keyword in keywords:
@@ -210,3 +320,74 @@ Responda apenas o nome da intenção."""
             return best
 
         return None
+
+    async def generate_response(self, prompt: str) -> str:
+        """Gera uma resposta usando IA baseada no prompt fornecido"""
+        if self._should_use_langchain():
+            response = await self._generate_with_langchain(prompt)
+            if response:
+                return response
+
+        return self._generate_fallback_response(prompt)
+
+    async def _generate_with_langchain(self, prompt: str) -> str | None:
+        """Gera resposta usando LangChain"""
+        try:
+            self._init_langchain()
+            if self._chain is None:
+                return None
+
+            from langchain_core.prompts import PromptTemplate
+
+            if self._settings.llm_provider == "openai":
+                from langchain_openai import ChatOpenAI
+
+                llm = ChatOpenAI(
+                    model="gpt-3.5-turbo",
+                    api_key=self._settings.openai_api_key,
+                    temperature=self._settings.llm_temperature,
+                    max_tokens=self._settings.llm_max_tokens,
+                    request_timeout=10,
+                )
+            else:
+                from langchain_anthropic import ChatAnthropic
+
+                llm = ChatAnthropic(
+                    api_key=self._settings.anthropic_api_key,
+                    temperature=0.7,
+                    max_tokens=200,
+                )
+
+            template = "{prompt}\n\nResposta bancária concisa:"
+
+            prompt_template = PromptTemplate(
+                input_variables=["prompt"], template=template
+            )
+            chain = prompt_template | llm
+
+            result = await chain.ainvoke({"prompt": prompt})
+            response = result.content if hasattr(result, "content") else str(result)
+
+            logger.info(f"IA response generated successfully")
+            return response.strip()
+
+        except Exception as e:
+            logger.warning(f"LangChain response generation failed: {e}")
+            return None
+
+    def _generate_fallback_response(self, prompt: str) -> str:
+        """Gera resposta de fallback quando IA não está disponível"""
+        prompt_lower = prompt.lower()
+
+        if "cpf" in prompt_lower:
+            return "Informe seu CPF (11 dígitos)."
+        elif "data" in prompt_lower and "nascimento" in prompt_lower:
+            return "Sua data de nascimento?"
+        elif "limite" in prompt_lower:
+            return "Consultando limite..."
+        elif "aumento" in prompt_lower:
+            return "Qual valor de aumento deseja?"
+        elif "cambio" in prompt_lower or "cotacao" in prompt_lower:
+            return "Qual moeda consultar?"
+        else:
+            return "Como posso ajudar? Limite, aumento, câmbio ou perfil?"

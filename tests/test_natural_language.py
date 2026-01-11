@@ -38,20 +38,15 @@ class TestTextNormalizer:
         assert normalize_text("Açúcar") == "acucar"
 
     def test_extract_cpf_from_text(self):
-        # Formato limpo
         assert extract_cpf_from_text("12345678901") == "12345678901"
 
-        # Com pontos e traço
         assert extract_cpf_from_text("123.456.789-01") == "12345678901"
 
-        # Com espaços
         assert extract_cpf_from_text("123 456 789 01") == "12345678901"
 
-        # Em frase
         assert extract_cpf_from_text("meu cpf é 123.456.789-01") == "12345678901"
         assert extract_cpf_from_text("o cpf 12345678901 aqui") == "12345678901"
 
-        # Sem CPF válido
         assert extract_cpf_from_text("não sei meu cpf") is None
         assert extract_cpf_from_text("12345") is None
 
@@ -265,11 +260,8 @@ class TestNaturalLanguageParser:
         assert len(msg) > 0
 
     def test_parse_income_negative(self):
-        # Valores negativos são tratados como inválidos
-        # Nota: extract_monetary_value não extrai valores negativos diretamente
-        # então o parse_income retornará mensagem de erro genérica
         value, msg = self.parser.parse_income("menos mil")
-        assert value is None or value == 1000.0  # Pode extrair "mil" ignorando "menos"
+        assert value is None or value == 1000.0
 
     def test_parse_expenses_valid(self):
         value, msg = self.parser.parse_expenses("3000")
@@ -324,7 +316,11 @@ class TestNaturalLanguageParser:
     def test_parse_has_debts_help(self):
         value, msg = self.parser.parse_has_debts("nao sei")
         assert value is None
-        assert "cartão" in msg.lower() or "divida" in msg.lower() or "empréstimo" in msg.lower()
+        assert (
+            "cartão" in msg.lower()
+            or "divida" in msg.lower()
+            or "empréstimo" in msg.lower()
+        )
 
     def test_parse_limit_value_valid(self):
         value, msg = self.parser.parse_limit_value("25000")

@@ -18,8 +18,9 @@ class Settings(BaseSettings):
 
     use_langchain: bool = False
     llm_provider: Literal["openai", "anthropic"] = "openai"
-    llm_temperature: float = 0.0
-    llm_max_tokens: int = 50
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 120  #
+    llm_model: str = "gpt-3.5-turbo"
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None

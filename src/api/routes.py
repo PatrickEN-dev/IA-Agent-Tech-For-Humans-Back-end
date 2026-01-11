@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from src.agents.cambio import ExchangeAgent
-from src.agents.chat import ChatAgent
+from src.agents.optimized_chat import OptimizedChatAgent
 from src.agents.credito import CreditAgent
 from src.agents.entrevista import InterviewAgent
 from src.agents.triagem import TriageAgent
@@ -25,7 +25,13 @@ triage_agent = TriageAgent()
 credit_agent = CreditAgent()
 interview_agent = InterviewAgent()
 exchange_agent = ExchangeAgent()
-chat_agent = ChatAgent()
+chat_agent = OptimizedChatAgent()
+
+
+@router.post("/chat/init", response_model=ChatResponse)
+async def init_chat() -> ChatResponse:
+    """Inicializa uma nova sessão de chat com mensagem de boas-vindas"""
+    return await chat_agent.init_session()
 
 
 @router.post("/chat", response_model=ChatResponse)
