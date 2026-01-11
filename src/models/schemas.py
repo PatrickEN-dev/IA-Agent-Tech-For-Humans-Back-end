@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field
 
 
 class AuthRequest(BaseModel):
-    cpf: str = Field(..., min_length=11, max_length=14, description="CPF with or without formatting")
-    birthdate: date = Field(..., description="Date of birth in YYYY-MM-DD format")
-    user_message: str | None = Field(None, description="Optional message for intent detection")
+    cpf: str = Field(..., min_length=11, max_length=14)
+    birthdate: date
+    user_message: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -25,7 +25,7 @@ class CreditLimitResponse(BaseModel):
 
 
 class LimitIncreaseRequest(BaseModel):
-    new_limit: float = Field(..., gt=0, description="Requested new credit limit")
+    new_limit: float = Field(..., gt=0)
 
 
 class LimitIncreaseResponse(BaseModel):
@@ -36,13 +36,11 @@ class LimitIncreaseResponse(BaseModel):
 
 
 class InterviewRequest(BaseModel):
-    renda_mensal: float = Field(..., ge=0, description="Monthly income")
-    tipo_emprego: Literal["CLT", "FORMAL", "PUBLICO", "AUTONOMO", "MEI", "DESEMPREGADO"] = Field(
-        ..., description="Employment type"
-    )
-    despesas: float = Field(..., ge=0, description="Monthly expenses")
-    num_dependentes: int = Field(..., ge=0, le=20, description="Number of dependents")
-    tem_dividas: bool = Field(..., description="Has existing debts")
+    renda_mensal: float = Field(..., ge=0)
+    tipo_emprego: Literal["CLT", "FORMAL", "PUBLICO", "AUTONOMO", "MEI", "DESEMPREGADO"]
+    despesas: float = Field(..., ge=0)
+    num_dependentes: int = Field(..., ge=0, le=20)
+    tem_dividas: bool
 
 
 class InterviewResponse(BaseModel):

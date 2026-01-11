@@ -135,7 +135,6 @@ Respond with ONLY the intent name, nothing else."""
 
             result = await self._chain.ainvoke({"message": message})
 
-            # Extract text from the response
             if hasattr(result, "content"):
                 output = result.content.strip().lower()
             else:
