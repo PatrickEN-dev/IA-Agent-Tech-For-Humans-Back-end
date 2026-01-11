@@ -57,3 +57,22 @@ class ExchangeRateResponse(BaseModel):
     rate: float
     timestamp: datetime
     message: str
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    message: str
+    state: str
+    authenticated: bool = False
+    token: str | None = None
+    data: dict | None = None

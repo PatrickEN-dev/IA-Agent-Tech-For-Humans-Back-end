@@ -145,3 +145,22 @@ class APIClient:
         except Exception as e:
             logger.error(f"Get exchange rate failed: {e}")
             return {"error": str(e)}
+
+    async def chat(self, session_id: str, message: str) -> dict:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/chat",
+                    json={"session_id": session_id, "message": message},
+                    headers={"Content-Type": "application/json"},
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("token"):
+                        st.session_state.token = data["token"]
+                    return data
+                else:
+                    return {"error": response.json(), "message": "Erro ao processar mensagem."}
+        except Exception as e:
+            logger.error(f"Chat failed: {e}")
+            return {"error": str(e), "message": "Erro de conexão com o servidor."}

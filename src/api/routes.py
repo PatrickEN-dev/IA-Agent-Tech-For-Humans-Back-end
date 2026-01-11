@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, Query
 
 from src.agents.cambio import ExchangeAgent
+from src.agents.chat import ChatAgent
 from src.agents.credito import CreditAgent
 from src.agents.entrevista import InterviewAgent
 from src.agents.triagem import TriageAgent
 from src.models.schemas import (
     AuthRequest,
     AuthResponse,
+    ChatRequest,
+    ChatResponse,
     CreditLimitResponse,
     ExchangeRateResponse,
     InterviewRequest,
@@ -22,6 +25,12 @@ triage_agent = TriageAgent()
 credit_agent = CreditAgent()
 interview_agent = InterviewAgent()
 exchange_agent = ExchangeAgent()
+chat_agent = ChatAgent()
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    return await chat_agent.process_message(request)
 
 
 @router.post("/triage/authenticate", response_model=AuthResponse)
