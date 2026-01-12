@@ -4,6 +4,7 @@ from src.agents.cambio import ExchangeAgent
 from src.agents.optimized_chat import OptimizedChatAgent
 from src.agents.credito import CreditAgent
 from src.agents.entrevista import InterviewAgent
+from src.agents.orchestrator import Orchestrator
 from src.agents.triagem import TriageAgent
 from src.models.schemas import (
     AuthRequest,
@@ -16,6 +17,8 @@ from src.models.schemas import (
     InterviewResponse,
     LimitIncreaseRequest,
     LimitIncreaseResponse,
+    UnifiedChatRequest,
+    UnifiedChatResponse,
 )
 from src.services.auth_service import get_current_cpf
 
@@ -26,6 +29,7 @@ credit_agent = CreditAgent()
 interview_agent = InterviewAgent()
 exchange_agent = ExchangeAgent()
 chat_agent = OptimizedChatAgent()
+orchestrator = Orchestrator()
 
 
 @router.post("/chat/init", response_model=ChatResponse)
@@ -72,3 +76,13 @@ async def get_exchange_rate(
     _cpf: str = Depends(get_current_cpf),
 ) -> ExchangeRateResponse:
     return await exchange_agent.get_rate(from_currency.upper(), to_currency.upper())
+
+
+@router.post("/unified/init", response_model=UnifiedChatResponse)
+async def init_unified_chat() -> UnifiedChatResponse:
+    return await orchestrator.init_session()
+
+
+@router.post("/unified/chat", response_model=UnifiedChatResponse)
+async def unified_chat(request: UnifiedChatRequest) -> UnifiedChatResponse:
+    return await orchestrator.process_message(request)

@@ -10,7 +10,9 @@ PESO_RENDA = 30
 PESO_EMPREGO: dict[str, int] = {
     "FORMAL": 300,
     "CLT": 300,
+    "PUBLICO": 300,
     "AUTONOMO": 200,
+    "MEI": 200,
     "DESEMPREGADO": 0,
 }
 

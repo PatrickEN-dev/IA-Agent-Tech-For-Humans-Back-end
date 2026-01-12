@@ -59,11 +59,21 @@ class CreditAgent:
 
         message = self._get_status_message(status, request.new_limit)
 
+        offer_interview = status == "denied"
+        interview_message = None
+        if offer_interview:
+            interview_message = (
+                "Gostaria de realizar uma entrevista financeira para melhorar seu score? "
+                "Com base nas suas informações, podemos reavaliar seu limite de crédito."
+            )
+
         return LimitIncreaseResponse(
             cpf=cpf,
             requested_limit=request.new_limit,
             status=status,
             message=message,
+            offer_interview=offer_interview,
+            interview_message=interview_message,
         )
 
     def _get_status_message(self, status: str, requested_limit: float) -> str:

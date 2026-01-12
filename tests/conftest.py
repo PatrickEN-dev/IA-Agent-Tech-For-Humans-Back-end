@@ -100,9 +100,8 @@ def valid_token(auth_service: AuthService) -> str:
 async def client(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[AsyncClient, None]:
-    # Patch get_settings to use test_settings
     monkeypatch.setattr("src.config.get_settings", lambda: test_settings)
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test/api") as ac:
         yield ac

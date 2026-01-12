@@ -33,6 +33,8 @@ class LimitIncreaseResponse(BaseModel):
     requested_limit: float
     status: Literal["approved", "pending_analysis", "denied"]
     message: str
+    offer_interview: bool = False
+    interview_message: str | None = None
 
 
 class InterviewRequest(BaseModel):
@@ -77,3 +79,41 @@ class ChatResponse(BaseModel):
     authenticated: bool = False
     token: str | None = None
     data: dict | None = None
+
+
+class RedirectAction(BaseModel):
+    should_redirect: bool = False
+    target_agent: str | None = None
+    reason: str | None = None
+    suggested_action: str | None = None
+
+
+class OrchestratorRequest(BaseModel):
+    session_id: str
+    intent: str
+    data: dict | None = None
+
+
+class OrchestratorResponse(BaseModel):
+    session_id: str
+    agent_used: str
+    result: dict
+    redirect: RedirectAction | None = None
+    message: str
+    next_steps: list[str] = []
+
+
+class UnifiedChatRequest(BaseModel):
+    session_id: str | None = None
+    message: str
+
+
+class UnifiedChatResponse(BaseModel):
+    session_id: str
+    message: str
+    state: str
+    authenticated: bool = False
+    token: str | None = None
+    current_agent: str
+    available_actions: list[str] = []
+    redirect_suggestion: RedirectAction | None = None
