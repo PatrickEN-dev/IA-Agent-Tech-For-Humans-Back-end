@@ -19,7 +19,9 @@ async def test_get_exchange_rate_success(client: AsyncClient, valid_token: str) 
 
 
 @pytest.mark.asyncio
-async def test_get_exchange_rate_eur_to_brl(client: AsyncClient, valid_token: str) -> None:
+async def test_get_exchange_rate_eur_to_brl(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.get(
         "/exchange",
         params={"from": "EUR", "to": "BRL"},
@@ -32,7 +34,9 @@ async def test_get_exchange_rate_eur_to_brl(client: AsyncClient, valid_token: st
 
 
 @pytest.mark.asyncio
-async def test_get_exchange_rate_same_currency(client: AsyncClient, valid_token: str) -> None:
+async def test_get_exchange_rate_same_currency(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.get(
         "/exchange",
         params={"from": "USD", "to": "USD"},
@@ -44,7 +48,9 @@ async def test_get_exchange_rate_same_currency(client: AsyncClient, valid_token:
 
 
 @pytest.mark.asyncio
-async def test_get_exchange_rate_lowercase(client: AsyncClient, valid_token: str) -> None:
+async def test_get_exchange_rate_lowercase(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.get(
         "/exchange",
         params={"from": "usd", "to": "brl"},
@@ -66,7 +72,9 @@ async def test_get_exchange_rate_unauthorized(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_exchange_rate_missing_params(client: AsyncClient, valid_token: str) -> None:
+async def test_get_exchange_rate_missing_params(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.get(
         "/exchange",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -75,7 +83,9 @@ async def test_get_exchange_rate_missing_params(client: AsyncClient, valid_token
 
 
 @pytest.mark.asyncio
-async def test_get_exchange_rate_invalid_currency_length(client: AsyncClient, valid_token: str) -> None:
+async def test_get_exchange_rate_invalid_currency_length(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.get(
         "/exchange",
         params={"from": "US", "to": "BRL"},
