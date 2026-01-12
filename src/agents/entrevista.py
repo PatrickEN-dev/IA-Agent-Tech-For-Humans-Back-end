@@ -44,10 +44,10 @@ class InterviewAgent:
 
     def _get_recommendation(self, score: int) -> str:
         if score >= 800:
-            return "Excellent profile! You qualify for our premium credit options."
+            return "Perfil excelente! Você se qualifica para nossas opções de crédito premium."
         elif score >= 600:
-            return "Good profile. You have access to standard credit products."
+            return "Bom perfil! Você tem acesso aos produtos de crédito padrão."
         elif score >= 400:
-            return "Moderate profile. Consider reducing expenses to improve your score."
+            return "Perfil moderado. Considere reduzir despesas para melhorar seu score."
         else:
-            return "Your profile needs improvement. We recommend financial counseling."
+            return "Seu perfil precisa de melhorias. Recomendamos uma consultoria financeira."

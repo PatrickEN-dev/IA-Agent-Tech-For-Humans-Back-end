@@ -78,8 +78,8 @@ class CreditAgent:
 
     def _get_status_message(self, status: str, requested_limit: float) -> str:
         messages = {
-            "approved": f"Your request for a limit of R$ {requested_limit:,.2f} has been approved.",
-            "pending_analysis": "Your request is under analysis. We will contact you soon.",
-            "denied": "Unfortunately, your request could not be approved at this time.",
+            "approved": f"Sua solicitação de limite de R$ {requested_limit:,.2f} foi aprovada!",
+            "pending_analysis": "Sua solicitação está em análise. Entraremos em contato em breve.",
+            "denied": "Infelizmente, sua solicitação não pôde ser aprovada no momento.",
         }
-        return messages.get(status, "Request processed.")
+        return messages.get(status, "Solicitação processada.")

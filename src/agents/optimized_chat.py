@@ -150,7 +150,6 @@ class OptimizedChatAgent:
         self._cache_max_size = 100
 
     def _is_banking_related(self, message: str) -> bool:
-        """Verifica se a mensagem está relacionada ao contexto bancário"""
         message_lower = message.lower()
 
         for forbidden in FORBIDDEN_TOPICS:
@@ -208,7 +207,6 @@ class OptimizedChatAgent:
         return self._sessions[session_id]
 
     async def init_session(self) -> ChatResponse:
-        """Inicializa sessão com mensagem de boas-vindas (única mensagem hard-coded)"""
         session_id = str(uuid.uuid4())
         session = self._get_session(session_id)
         session.state = ConversationState.COLLECTING_DATA
@@ -305,29 +303,22 @@ class OptimizedChatAgent:
             return "Erro técnico. Tente novamente."
 
     def _build_system_context(self, session: SessionData) -> str:
-        """Constrói contexto do sistema baseado no estado atual"""
 
-        base_context = """Assistente Banco Ágil. IMPORTANTE: Responda APENAS questões bancárias (limite, crédito, câmbio, perfil).
-Serviços: limite, aumento, câmbio, perfil.
-NUNCA responda matemática, história, tecnologia, ou outros assuntos.
-
-"""
+        base = (
+            "Banco Ágil.Só bancário(limite/crédito/câmbio/perfil).Rejeite outros temas."
+        )
 
         if session.state == ConversationState.COLLECTING_DATA:
             if not session.cpf:
-                return base_context + "Colete CPF (11 dígitos)."
+                return f"{base}Colete CPF(11dig)."
             elif not session.birthdate:
-                return base_context + "Colete data nascimento (DD/MM/AAAA)."
-            else:
-                return base_context + "Validando dados..."
+                return f"{base}Colete nascimento(DD/MM/AAAA)."
+            return f"{base}Validando..."
 
-        elif session.state == ConversationState.AUTHENTICATED:
-            return (
-                base_context
-                + f"Cliente autenticado. CPF: {session.cpf}. Ajude com serviços."
-            )
+        if session.state == ConversationState.AUTHENTICATED:
+            return f"{base}Autenticado.CPF:{session.cpf}.Ajude."
 
-        return base_context
+        return base
 
     def _build_ai_prompt(
         self,
@@ -336,23 +327,19 @@ NUNCA responda matemática, história, tecnologia, ou outros assuntos.
         current_message: str,
         session: SessionData,
     ) -> str:
-        """Constrói o prompt completo para a IA"""
-
-        prompt = f"{system_context}\n\nHistórico recente:\n"
+        prompt = f"{system_context}\n"
 
         for msg in history:
-            role = "Cliente" if msg["role"] == "user" else "Você"
-            prompt += f"{role}: {msg['content']}\n"
+            role = "U" if msg["role"] == "user" else "A"
+            prompt += f"{role}:{msg['content']}\n"
 
-        prompt += f"\nCliente: {current_message}\n\n"
-        prompt += "Resposta concisa, profissional, máximo 2 frases."
+        prompt += f"U:{current_message}\n→Max 2 frases:"
 
         return prompt
 
     async def _process_ai_response(
         self, session: SessionData, user_message: str, ai_response: str
     ) -> None:
-        """Processa a resposta da IA para atualizar estado se necessário"""
 
         if session.state == ConversationState.COLLECTING_DATA and not session.cpf:
             from src.utils.text_normalizer import extract_cpf_from_text
@@ -385,7 +372,6 @@ NUNCA responda matemática, história, tecnologia, ou outros assuntos.
             session.state = ConversationState.GOODBYE
 
     async def _try_authentication(self, session: SessionData) -> None:
-        """Tenta autenticar o usuário"""
         try:
             client = await self._csv_service.get_client_by_cpf(session.cpf)
             if client and client.birth_date == session.birthdate:
@@ -399,7 +385,6 @@ NUNCA responda matemática, história, tecnologia, ou outros assuntos.
             logger.error(f"Erro na autenticação: {e}")
 
     def _generate_cache_key(self, session: SessionData, message: str) -> str:
-        """Gera chave de cache baseada no estado e mensagem"""
         state_key = (
             f"{session.state.value}_{bool(session.cpf)}_{bool(session.birthdate)}"
         )
@@ -407,7 +392,6 @@ NUNCA responda matemática, história, tecnologia, ou outros assuntos.
         return f"{state_key}_{message_hash}"
 
     def _cache_response(self, key: str, response: str) -> None:
-        """Armazena resposta no cache com limite de tamanho"""
         if len(self._response_cache) >= self._cache_max_size:
             oldest_key = next(iter(self._response_cache))
             del self._response_cache[oldest_key]

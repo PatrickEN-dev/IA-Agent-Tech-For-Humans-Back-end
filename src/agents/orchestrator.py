@@ -116,26 +116,29 @@ class Orchestrator:
 
         if session.state == OrchestratorState.WELCOME:
             session.state = OrchestratorState.COLLECTING_CPF
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Olá! Para começar, informe seu CPF."
+                technical_message="Olá! Para começar, informe seu CPF.",
+                user_message=message,
             )
 
         if self._is_exit_command(message):
             session.state = OrchestratorState.GOODBYE
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Obrigado por usar o Banco Ágil! Até logo."
+                technical_message="Obrigado por usar o Banco Ágil! Até logo.",
+                user_message=message,
             )
 
         if session.pending_redirect and self._accepts_redirect(message):
-            return await self._handle_redirect_acceptance(session_id, session)
+            return await self._handle_redirect_acceptance(session_id, session, message)
 
         if session.pending_redirect and self._rejects_redirect(message):
             session.pending_redirect = None
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Tudo bem! Posso ajudar com mais alguma coisa? Limite, aumento, câmbio ou perfil."
+                technical_message="Tudo bem! Posso ajudar com mais alguma coisa? Limite, aumento, câmbio ou perfil.",
+                user_message=message,
             )
 
         response = await self._route_message(session_id, session, message)
@@ -191,24 +194,27 @@ class Orchestrator:
         cpf = extract_cpf_from_text(message)
 
         if not cpf or len(cpf) != 11:
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "CPF inválido. Informe os 11 dígitos do seu CPF."
+                technical_message="CPF inválido. Informe os 11 dígitos do seu CPF.",
+                user_message=message,
             )
 
         client = await self._csv_service.get_client_by_cpf(cpf)
         if not client:
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "CPF não encontrado em nossa base. Verifique e tente novamente."
+                technical_message="CPF não encontrado em nossa base. Verifique e tente novamente.",
+                user_message=message,
             )
 
         session.cpf = cpf
         session.state = OrchestratorState.COLLECTING_BIRTHDATE
 
-        return self._build_response(
+        return await self._build_humanized_response(
             session_id, session,
-            f"CPF validado! Agora, qual é a sua data de nascimento?"
+            technical_message="CPF validado! Agora, qual é a sua data de nascimento?",
+            user_message=message,
         )
 
     async def _handle_birthdate_collection(
@@ -217,27 +223,30 @@ class Orchestrator:
         date_parts = parse_date_from_text(message)
 
         if not date_parts:
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Formato inválido. Use DD/MM/AAAA."
+                technical_message="Formato inválido. Use DD/MM/AAAA.",
+                user_message=message,
             )
 
         try:
             day, month, year = date_parts
             birthdate = date(year, month, day)
         except ValueError:
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Data inválida. Verifique e tente novamente."
+                technical_message="Data inválida. Verifique e tente novamente.",
+                user_message=message,
             )
 
         client = await self._csv_service.get_client_by_cpf(session.cpf)
         client_birthdate = date.fromisoformat(client.data_nascimento)
 
         if client_birthdate != birthdate:
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Data de nascimento incorreta. Tente novamente."
+                technical_message="Data de nascimento incorreta. Tente novamente.",
+                user_message=message,
             )
 
         session.birthdate = birthdate
@@ -245,15 +254,19 @@ class Orchestrator:
         session.state = OrchestratorState.AUTHENTICATED
         session.current_agent = AgentType.TRIAGE
 
-        return self._build_response(
+        return await self._build_humanized_response(
             session_id, session,
-            f"Autenticado com sucesso! Olá, {client.nome}!\n\n"
-            "Como posso ajudar?\n"
-            "- Ver meu limite\n"
-            "- Solicitar aumento\n"
-            "- Cotação de moedas\n"
-            "- Atualizar perfil",
-            authenticated=True
+            technical_message=(
+                f"Autenticado com sucesso! Olá, {client.nome}!\n\n"
+                "Como posso ajudar?\n"
+                "- Ver meu limite\n"
+                "- Solicitar aumento\n"
+                "- Cotação de moedas\n"
+                "- Atualizar perfil"
+            ),
+            user_message=message,
+            authenticated=True,
+            user_name=client.nome,
         )
 
     async def _handle_authenticated_message(
@@ -521,7 +534,7 @@ class Orchestrator:
         )
 
     async def _handle_redirect_acceptance(
-        self, session_id: str, session: OrchestratorSession
+        self, session_id: str, session: OrchestratorSession, message: str
     ) -> UnifiedChatResponse:
         redirect = session.pending_redirect
         session.pending_redirect = None
@@ -530,29 +543,33 @@ class Orchestrator:
             session.current_agent = AgentType.INTERVIEW
             session.state = OrchestratorState.INTERVIEW_INCOME
             session.collected_data = {}
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                "Ótimo! Vamos atualizar seu perfil financeiro.\n"
-                "Qual é sua renda mensal?",
-                authenticated=True
+                technical_message="Ótimo! Vamos atualizar seu perfil financeiro. Qual é sua renda mensal?",
+                user_message=message,
+                authenticated=True,
             )
 
         if redirect.target_agent == "credit":
             session.current_agent = AgentType.CREDIT
             result = await self._credit_agent.get_limit(session.cpf)
-            return self._build_response(
+            return await self._build_humanized_response(
                 session_id, session,
-                f"Seu novo limite: R$ {result.current_limit:,.2f}\n"
-                f"Disponível: R$ {result.available_limit:,.2f}\n"
-                f"Score: {result.score}\n\n"
-                "Posso ajudar com mais alguma coisa?",
-                authenticated=True
+                technical_message=(
+                    f"Seu novo limite: R$ {result.current_limit:,.2f}\n"
+                    f"Disponível: R$ {result.available_limit:,.2f}\n"
+                    f"Score: {result.score}\n\n"
+                    "Posso ajudar com mais alguma coisa?"
+                ),
+                user_message=message,
+                authenticated=True,
             )
 
-        return self._build_response(
+        return await self._build_humanized_response(
             session_id, session,
-            "Como posso ajudar?",
-            authenticated=True
+            technical_message="Como posso ajudar?",
+            user_message=message,
+            authenticated=True,
         )
 
     def _is_exit_command(self, message: str) -> bool:
@@ -589,6 +606,35 @@ class Orchestrator:
         return UnifiedChatResponse(
             session_id=session_id,
             message=message,
+            state=session.state.value,
+            authenticated=authenticated or session.token is not None,
+            token=session.token,
+            current_agent=session.current_agent.value,
+            available_actions=self._get_available_actions(session),
+            redirect_suggestion=redirect,
+        )
+
+    async def _build_humanized_response(
+        self,
+        session_id: str,
+        session: OrchestratorSession,
+        technical_message: str,
+        user_message: str,
+        authenticated: bool = False,
+        redirect: Optional[RedirectAction] = None,
+        user_name: Optional[str] = None,
+    ) -> UnifiedChatResponse:
+        """Constrói resposta humanizada usando IA ou fallback"""
+        humanized_message = await self._llm_service.humanize_response(
+            user_message=user_message,
+            technical_response=technical_message,
+            conversation_context=session.conversation_history,
+            user_name=user_name,
+        )
+
+        return UnifiedChatResponse(
+            session_id=session_id,
+            message=humanized_message,
             state=session.state.value,
             authenticated=authenticated or session.token is not None,
             token=session.token,

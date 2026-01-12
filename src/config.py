@@ -18,9 +18,9 @@ class Settings(BaseSettings):
 
     use_langchain: bool = False
     llm_provider: Literal["openai", "anthropic"] = "openai"
-    llm_temperature: float = 0.2
-    llm_max_tokens: int = 120  #
-    llm_model: str = "gpt-3.5-turbo"
+    llm_temperature: float = 0.3
+    llm_max_tokens: int = 100
+    llm_model: str = "gpt-4o-mini"  # 85 tokens/s, 60% mais barato que gpt-3.5
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
