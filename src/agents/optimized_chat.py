@@ -305,18 +305,18 @@ class OptimizedChatAgent:
     def _build_system_context(self, session: SessionData) -> str:
 
         base = (
-            "Banco Ágil.Só bancário(limite/crédito/câmbio/perfil).Rejeite outros temas."
+            "Banco Ágil.Bancário(limite/crédito/câmbio/perfil).Tom amigável e claro."
         )
 
         if session.state == ConversationState.COLLECTING_DATA:
             if not session.cpf:
-                return f"{base}Colete CPF(11dig)."
+                return f"{base}Peça CPF educadamente."
             elif not session.birthdate:
-                return f"{base}Colete nascimento(DD/MM/AAAA)."
+                return f"{base}Peça data nascimento."
             return f"{base}Validando..."
 
         if session.state == ConversationState.AUTHENTICATED:
-            return f"{base}Autenticado.CPF:{session.cpf}.Ajude."
+            return f"{base}Autenticado.Explique opções quando perguntado."
 
         return base
 
@@ -333,7 +333,7 @@ class OptimizedChatAgent:
             role = "U" if msg["role"] == "user" else "A"
             prompt += f"{role}:{msg['content']}\n"
 
-        prompt += f"U:{current_message}\n→Max 2 frases:"
+        prompt += f"U:{current_message}\n→Responda claro e amigável:"
 
         return prompt
 

@@ -293,7 +293,7 @@ class Orchestrator:
             session.state = OrchestratorState.CREDIT_INCREASE_FLOW
             return self._build_response(
                 session_id, session,
-                "Qual valor de limite deseja solicitar?",
+                "Vou te ajudar a solicitar um aumento no seu limite de crédito. Qual valor você gostaria de ter como novo limite?",
                 authenticated=True
             )
 
@@ -303,8 +303,7 @@ class Orchestrator:
             session.collected_data = {}
             return self._build_response(
                 session_id, session,
-                "Vamos atualizar seu perfil financeiro.\n"
-                "Qual é sua renda mensal?",
+                "Ótimo! Vou te ajudar a atualizar seu perfil financeiro. Com essas informações, podemos avaliar melhores opções de crédito para você.\n\nPara começar, qual é a sua renda mensal?",
                 authenticated=True
             )
 
@@ -319,7 +318,7 @@ class Orchestrator:
 
         return self._build_response(
             session_id, session,
-            "Como posso ajudar? Limite, aumento, câmbio ou perfil.",
+            "Posso te ajudar com: consultar seu limite de crédito, solicitar aumento de limite, verificar cotação de moedas ou atualizar seu perfil financeiro. O que você prefere?",
             authenticated=True
         )
 
@@ -332,7 +331,7 @@ class Orchestrator:
             if value is None:
                 return self._build_response(
                     session_id, session,
-                    "Qual valor de limite deseja? Ex: 10000, 10k.",
+                    "Não consegui identificar o valor. Pode me informar quanto você gostaria de limite? Por exemplo: 10000, 10k ou dez mil.",
                     authenticated=True
                 )
 

@@ -354,7 +354,7 @@ class LLMService:
         try:
             from langchain_core.prompts import PromptTemplate
 
-            template = "Banco Ágil.1-2 frases.\n{prompt}"
+            template = "Banco Ágil.Responda claro e amigável.\n{prompt}"
 
             prompt_template = PromptTemplate(
                 input_variables=["prompt"], template=template
@@ -424,7 +424,7 @@ class LLMService:
                 if last.get("role") == "assistant":
                     ctx = f"[Ant:{last.get('content', '')[:50]}]"
 
-            system_prompt = f"""Banco Ágil.Humanize 1-2 frases.{name_part}{ctx}
+            system_prompt = f"""Banco Ágil.Humanize de forma clara e amigável.{name_part}{ctx}
 U:"{user_message}"
 T:"{technical_response}"
 →"""
