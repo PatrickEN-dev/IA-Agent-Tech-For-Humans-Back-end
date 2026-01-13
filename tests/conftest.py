@@ -15,7 +15,6 @@ from src.main import app
 from src.services.auth_service import AuthService
 
 
-# Backup original CSV data
 ORIGINAL_DATA_DIR = Path("src/data")
 BACKUP_CLIENTS = None
 

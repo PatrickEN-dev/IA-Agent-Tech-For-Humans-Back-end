@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["openai", "anthropic"] = "openai"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 100
-    llm_model: str = "gpt-4o-mini"  # 85 tokens/s, 60% mais barato que gpt-3.5
+    llm_model: str = "gpt-4o-mini"
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
