@@ -256,7 +256,7 @@ class LLMService:
         try:
             from langchain_core.prompts import PromptTemplate
 
-            template = "Intent:credit_limit|request_increase|exchange_rate|interview|other\n\"{message}\"→"
+            template = 'Intent:credit_limit|request_increase|exchange_rate|interview|other\n"{message}"→'
             prompt = PromptTemplate(input_variables=["message"], template=template)
             self._intent_chain = prompt | self._get_llm(max_tokens=15, temperature=0.1)
             logger.info(f"Intent chain initialized: {self._settings.llm_model}")

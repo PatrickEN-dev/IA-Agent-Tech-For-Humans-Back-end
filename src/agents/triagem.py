@@ -33,14 +33,18 @@ class TriageAgent:
         if not client:
             self._failed_attempts[cpf] += 1
             remaining = self._settings.max_auth_attempts - self._failed_attempts[cpf]
-            logger.info(f"Client not found: {cpf[:3]}***, attempts remaining: {remaining}")
+            logger.info(
+                f"Client not found: {cpf[:3]}***, attempts remaining: {remaining}"
+            )
             raise AuthenticationError(remaining_attempts=remaining)
 
         client_birthdate = date.fromisoformat(client.data_nascimento)
         if client_birthdate != request.birthdate:
             self._failed_attempts[cpf] += 1
             remaining = self._settings.max_auth_attempts - self._failed_attempts[cpf]
-            logger.info(f"Invalid birthdate for CPF: {cpf[:3]}***, attempts remaining: {remaining}")
+            logger.info(
+                f"Invalid birthdate for CPF: {cpf[:3]}***, attempts remaining: {remaining}"
+            )
             raise AuthenticationError(remaining_attempts=remaining)
 
         self._failed_attempts[cpf] = 0
@@ -49,7 +53,9 @@ class TriageAgent:
 
         intent = await self._llm_service.classify_intent(request.user_message)
 
-        logger.info(f"Authentication successful for CPF: {cpf[:3]}***, intent: {intent}")
+        logger.info(
+            f"Authentication successful for CPF: {cpf[:3]}***, intent: {intent}"
+        )
 
         return AuthResponse(
             authenticated=True,

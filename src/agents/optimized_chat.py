@@ -304,9 +304,7 @@ class OptimizedChatAgent:
 
     def _build_system_context(self, session: SessionData) -> str:
 
-        base = (
-            "Banco Ágil.Bancário(limite/crédito/câmbio/perfil).Tom amigável e claro."
-        )
+        base = "Banco Ágil.Bancário(limite/crédito/câmbio/perfil).Tom amigável e claro."
 
         if session.state == ConversationState.COLLECTING_DATA:
             if not session.cpf:

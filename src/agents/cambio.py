@@ -19,7 +19,13 @@ FALLBACK_RATES: dict[str, dict[str, float]] = {
     "BRL": {"USD": 0.186, "EUR": 0.171, "GBP": 0.147, "JPY": 27.9, "ARS": 270.0},
     "GBP": {"BRL": 6.80, "USD": 1.27, "EUR": 1.16, "JPY": 190.0, "ARS": 1840.0},
     "JPY": {"BRL": 0.036, "USD": 0.0067, "EUR": 0.0061, "GBP": 0.0053, "ARS": 9.67},
-    "ARS": {"BRL": 0.0037, "USD": 0.00069, "EUR": 0.00063, "GBP": 0.00054, "JPY": 0.103},
+    "ARS": {
+        "BRL": 0.0037,
+        "USD": 0.00069,
+        "EUR": 0.00063,
+        "GBP": 0.00054,
+        "JPY": 0.103,
+    },
 }
 
 
@@ -29,7 +35,9 @@ class ExchangeAgent:
         self._rate_cache: dict[str, tuple[float, datetime]] = {}
         self._cache_ttl_seconds = 300
 
-    async def get_rate(self, from_currency: str, to_currency: str) -> ExchangeRateResponse:
+    async def get_rate(
+        self, from_currency: str, to_currency: str
+    ) -> ExchangeRateResponse:
         rate, timestamp, source = await self._fetch_rate(from_currency, to_currency)
 
         message = self._format_message(from_currency, to_currency, rate, source)
@@ -49,7 +57,9 @@ class ExchangeAgent:
         cached = self._rate_cache.get(cache_key)
         if cached:
             rate, cached_time = cached
-            if (datetime.now(timezone.utc) - cached_time).total_seconds() < self._cache_ttl_seconds:
+            if (
+                datetime.now(timezone.utc) - cached_time
+            ).total_seconds() < self._cache_ttl_seconds:
                 return rate, cached_time, "cached"
 
         for api_url in FALLBACK_APIS:
@@ -65,7 +75,9 @@ class ExchangeAgent:
                         rate = data[rates_key][to_currency]
                         now = datetime.now(timezone.utc)
                         self._rate_cache[cache_key] = (rate, now)
-                        logger.info(f"Exchange rate fetched: {from_currency}/{to_currency} = {rate}")
+                        logger.info(
+                            f"Exchange rate fetched: {from_currency}/{to_currency} = {rate}"
+                        )
                         return rate, now, "live"
             except Exception as e:
                 logger.warning(f"API {api_url} failed: {e}")
@@ -78,9 +90,15 @@ class ExchangeAgent:
     def _get_fallback_rate(self, from_currency: str, to_currency: str) -> float:
         if from_currency == to_currency:
             return 1.0
-        if from_currency in FALLBACK_RATES and to_currency in FALLBACK_RATES[from_currency]:
+        if (
+            from_currency in FALLBACK_RATES
+            and to_currency in FALLBACK_RATES[from_currency]
+        ):
             return FALLBACK_RATES[from_currency][to_currency]
-        if to_currency in FALLBACK_RATES and from_currency in FALLBACK_RATES[to_currency]:
+        if (
+            to_currency in FALLBACK_RATES
+            and from_currency in FALLBACK_RATES[to_currency]
+        ):
             return 1.0 / FALLBACK_RATES[to_currency][from_currency]
         return 1.0
 

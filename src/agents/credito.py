@@ -1,7 +1,11 @@
 import logging
 from datetime import datetime, timezone
 
-from src.models.schemas import CreditLimitResponse, LimitIncreaseRequest, LimitIncreaseResponse
+from src.models.schemas import (
+    CreditLimitResponse,
+    LimitIncreaseRequest,
+    LimitIncreaseResponse,
+)
 from src.services.csv_service import CSVService
 from src.services.score_service import ScoreService
 from src.utils.exceptions import ClientNotFoundError
@@ -32,7 +36,9 @@ class CreditAgent:
             score=score,
         )
 
-    async def request_increase(self, cpf: str, request: LimitIncreaseRequest) -> LimitIncreaseResponse:
+    async def request_increase(
+        self, cpf: str, request: LimitIncreaseRequest
+    ) -> LimitIncreaseResponse:
         client = await self._csv_service.get_client_by_cpf(cpf)
         if not client:
             raise ClientNotFoundError(cpf)

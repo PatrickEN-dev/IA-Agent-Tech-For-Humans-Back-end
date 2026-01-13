@@ -73,7 +73,9 @@ class OrchestratorSession:
 class Orchestrator:
     def __init__(self):
         self._settings = get_settings()
-        self._sessions: dict[str, OrchestratorSession] = defaultdict(OrchestratorSession)
+        self._sessions: dict[str, OrchestratorSession] = defaultdict(
+            OrchestratorSession
+        )
 
         self._triage_agent = TriageAgent()
         self._credit_agent = CreditAgent()
@@ -117,7 +119,8 @@ class Orchestrator:
         if session.state == OrchestratorState.WELCOME:
             session.state = OrchestratorState.COLLECTING_CPF
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Olá! Para começar, informe seu CPF.",
                 user_message=message,
             )
@@ -125,7 +128,8 @@ class Orchestrator:
         if self._is_exit_command(message):
             session.state = OrchestratorState.GOODBYE
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Obrigado por usar o Banco Ágil! Até logo.",
                 user_message=message,
             )
@@ -136,14 +140,17 @@ class Orchestrator:
         if session.pending_redirect and self._rejects_redirect(message):
             session.pending_redirect = None
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Tudo bem! Posso ajudar com mais alguma coisa? Limite, aumento, câmbio ou perfil.",
                 user_message=message,
             )
 
         response = await self._route_message(session_id, session, message)
 
-        session.conversation_history.append({"role": "assistant", "content": response.message})
+        session.conversation_history.append(
+            {"role": "assistant", "content": response.message}
+        )
 
         return response
 
@@ -158,7 +165,9 @@ class Orchestrator:
             return await self._handle_birthdate_collection(session_id, session, message)
 
         if session.state == OrchestratorState.AUTHENTICATED:
-            return await self._handle_authenticated_message(session_id, session, message)
+            return await self._handle_authenticated_message(
+                session_id, session, message
+            )
 
         if session.state in [
             OrchestratorState.CREDIT_FLOW,
@@ -184,8 +193,7 @@ class Orchestrator:
             return await self._handle_exchange_flow(session_id, session, message)
 
         return self._build_response(
-            session_id, session,
-            "Desculpe, não entendi. Como posso ajudar?"
+            session_id, session, "Desculpe, não entendi. Como posso ajudar?"
         )
 
     async def _handle_cpf_collection(
@@ -195,7 +203,8 @@ class Orchestrator:
 
         if not cpf or len(cpf) != 11:
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="CPF inválido. Informe os 11 dígitos do seu CPF.",
                 user_message=message,
             )
@@ -203,7 +212,8 @@ class Orchestrator:
         client = await self._csv_service.get_client_by_cpf(cpf)
         if not client:
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="CPF não encontrado em nossa base. Verifique e tente novamente.",
                 user_message=message,
             )
@@ -212,7 +222,8 @@ class Orchestrator:
         session.state = OrchestratorState.COLLECTING_BIRTHDATE
 
         return await self._build_humanized_response(
-            session_id, session,
+            session_id,
+            session,
             technical_message="CPF validado! Agora, qual é a sua data de nascimento?",
             user_message=message,
         )
@@ -224,7 +235,8 @@ class Orchestrator:
 
         if not date_parts:
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Formato inválido. Use DD/MM/AAAA.",
                 user_message=message,
             )
@@ -234,7 +246,8 @@ class Orchestrator:
             birthdate = date(year, month, day)
         except ValueError:
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Data inválida. Verifique e tente novamente.",
                 user_message=message,
             )
@@ -244,7 +257,8 @@ class Orchestrator:
 
         if client_birthdate != birthdate:
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Data de nascimento incorreta. Tente novamente.",
                 user_message=message,
             )
@@ -255,7 +269,8 @@ class Orchestrator:
         session.current_agent = AgentType.TRIAGE
 
         return await self._build_humanized_response(
-            session_id, session,
+            session_id,
+            session,
             technical_message=(
                 f"Autenticado com sucesso! Olá, {client.nome}!\n\n"
                 "Como posso ajudar?\n"
@@ -286,15 +301,18 @@ class Orchestrator:
             )
 
             session.state = OrchestratorState.AUTHENTICATED
-            return self._build_response(session_id, session, response_message, authenticated=True)
+            return self._build_response(
+                session_id, session, response_message, authenticated=True
+            )
 
         if intent == "request_increase":
             session.current_agent = AgentType.CREDIT
             session.state = OrchestratorState.CREDIT_INCREASE_FLOW
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Vou te ajudar a solicitar um aumento no seu limite de crédito. Qual valor você gostaria de ter como novo limite?",
-                authenticated=True
+                authenticated=True,
             )
 
         if intent == "interview":
@@ -302,24 +320,27 @@ class Orchestrator:
             session.state = OrchestratorState.INTERVIEW_INCOME
             session.collected_data = {}
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Ótimo! Vou te ajudar a atualizar seu perfil financeiro. Com essas informações, podemos avaliar melhores opções de crédito para você.\n\nPara começar, qual é a sua renda mensal?",
-                authenticated=True
+                authenticated=True,
             )
 
         if intent == "exchange_rate":
             session.current_agent = AgentType.EXCHANGE
             session.state = OrchestratorState.EXCHANGE_FROM
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Qual moeda você quer converter? (USD, EUR, GBP, etc.)",
-                authenticated=True
+                authenticated=True,
             )
 
         return self._build_response(
-            session_id, session,
+            session_id,
+            session,
             "Posso te ajudar com: consultar seu limite de crédito, solicitar aumento de limite, verificar cotação de moedas ou atualizar seu perfil financeiro. O que você prefere?",
-            authenticated=True
+            authenticated=True,
         )
 
     async def _handle_credit_flow(
@@ -330,9 +351,10 @@ class Orchestrator:
 
             if value is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Não consegui identificar o valor. Pode me informar quanto você gostaria de limite? Por exemplo: 10000, 10k ou dez mil.",
-                    authenticated=True
+                    authenticated=True,
                 )
 
             request = LimitIncreaseRequest(new_limit=value)
@@ -345,22 +367,21 @@ class Orchestrator:
                     should_redirect=True,
                     target_agent="interview",
                     reason="credit_denied",
-                    suggested_action="complete_interview"
+                    suggested_action="complete_interview",
                 )
                 response_message += f"\n\n{result.interview_message}"
 
             session.state = OrchestratorState.AUTHENTICATED
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 response_message,
                 authenticated=True,
-                redirect=session.pending_redirect
+                redirect=session.pending_redirect,
             )
 
         return self._build_response(
-            session_id, session,
-            "Como posso ajudar?",
-            authenticated=True
+            session_id, session, "Como posso ajudar?", authenticated=True
         )
 
     async def _handle_interview_flow(
@@ -371,77 +392,85 @@ class Orchestrator:
             value = extract_monetary_value(message)
             if value is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Qual sua renda mensal? Ex: 5000, 5k.",
-                    authenticated=True
+                    authenticated=True,
                 )
             session.collected_data["renda_mensal"] = value
             session.state = OrchestratorState.INTERVIEW_EMPLOYMENT
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Qual seu tipo de trabalho? CLT, autônomo, MEI, servidor público ou desempregado?",
-                authenticated=True
+                authenticated=True,
             )
 
         if session.state == OrchestratorState.INTERVIEW_EMPLOYMENT:
             emp_type = extract_employment_type(message)
             if emp_type is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Opções: CLT, Servidor Público (PUBLICO), Autônomo (AUTONOMO), MEI ou Desempregado.",
-                    authenticated=True
+                    authenticated=True,
                 )
             session.collected_data["tipo_emprego"] = emp_type
             session.state = OrchestratorState.INTERVIEW_EXPENSES
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Qual o total das suas despesas mensais?",
-                authenticated=True
+                authenticated=True,
             )
 
         if session.state == OrchestratorState.INTERVIEW_EXPENSES:
             value = extract_monetary_value(message)
             if value is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Qual o total aproximado? Ex: 2000, 2k.",
-                    authenticated=True
+                    authenticated=True,
                 )
             session.collected_data["despesas"] = value
             session.state = OrchestratorState.INTERVIEW_DEPENDENTS
             return self._build_response(
-                session_id, session,
-                "Quantos dependentes você tem?",
-                authenticated=True
+                session_id, session, "Quantos dependentes você tem?", authenticated=True
             )
 
         if session.state == OrchestratorState.INTERVIEW_DEPENDENTS:
             value = extract_integer(message)
             if value is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Quantas pessoas dependem de você? Se nenhuma, diga 'zero'.",
-                    authenticated=True
+                    authenticated=True,
                 )
             session.collected_data["num_dependentes"] = value
             session.state = OrchestratorState.INTERVIEW_DEBTS
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 "Você tem alguma dívida em aberto? (sim/não)",
-                authenticated=True
+                authenticated=True,
             )
 
         if session.state == OrchestratorState.INTERVIEW_DEBTS:
             msg_lower = message.lower()
             if "sim" in msg_lower or "tenho" in msg_lower or "yes" in msg_lower:
                 has_debts = True
-            elif "nao" in msg_lower or "não" in msg_lower or "no" in msg_lower or "nenhuma" in msg_lower:
+            elif (
+                "nao" in msg_lower
+                or "não" in msg_lower
+                or "no" in msg_lower
+                or "nenhuma" in msg_lower
+            ):
                 has_debts = False
             else:
                 return self._build_response(
-                    session_id, session,
-                    "Responda sim ou não.",
-                    authenticated=True
+                    session_id, session, "Responda sim ou não.", authenticated=True
                 )
 
             session.collected_data["tem_dividas"] = has_debts
@@ -463,24 +492,26 @@ class Orchestrator:
                 should_redirect=True,
                 target_agent="credit",
                 reason="interview_completed",
-                suggested_action="check_new_limit"
+                suggested_action="check_new_limit",
             )
 
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 f"Entrevista concluída!\n\n"
                 f"Score anterior: {result.previous_score}\n"
                 f"Novo score: {result.new_score}\n\n"
                 f"{result.recommendation}\n\n"
                 "Deseja consultar seu novo limite de crédito?",
                 authenticated=True,
-                redirect=redirect
+                redirect=redirect,
             )
 
         return self._build_response(
-            session_id, session,
+            session_id,
+            session,
             "Vamos continuar. Qual sua renda mensal?",
-            authenticated=True
+            authenticated=True,
         )
 
     async def _handle_exchange_flow(
@@ -491,25 +522,28 @@ class Orchestrator:
             currency = extract_currency_code(message)
             if currency is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Moeda não reconhecida. Use: USD, EUR, GBP, JPY ou ARS.",
-                    authenticated=True
+                    authenticated=True,
                 )
             session.collected_data["from_currency"] = currency
             session.state = OrchestratorState.EXCHANGE_TO
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 f"Converter {currency} para qual moeda? (BRL para Real)",
-                authenticated=True
+                authenticated=True,
             )
 
         if session.state == OrchestratorState.EXCHANGE_TO:
             currency = extract_currency_code(message)
             if currency is None:
                 return self._build_response(
-                    session_id, session,
+                    session_id,
+                    session,
                     "Moeda não reconhecida. Use: BRL, USD, EUR, GBP, JPY ou ARS.",
-                    authenticated=True
+                    authenticated=True,
                 )
 
             from_curr = session.collected_data.get("from_currency", "USD")
@@ -519,17 +553,16 @@ class Orchestrator:
             session.collected_data = {}
 
             return self._build_response(
-                session_id, session,
+                session_id,
+                session,
                 f"Cotação: 1 {from_curr} = {result.rate:.4f} {currency}\n"
                 f"Atualizado em: {result.timestamp.strftime('%d/%m/%Y %H:%M')}\n\n"
                 "Posso ajudar com mais alguma coisa?",
-                authenticated=True
+                authenticated=True,
             )
 
         return self._build_response(
-            session_id, session,
-            "Qual moeda você quer converter?",
-            authenticated=True
+            session_id, session, "Qual moeda você quer converter?", authenticated=True
         )
 
     async def _handle_redirect_acceptance(
@@ -543,7 +576,8 @@ class Orchestrator:
             session.state = OrchestratorState.INTERVIEW_INCOME
             session.collected_data = {}
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message="Ótimo! Vamos atualizar seu perfil financeiro. Qual é sua renda mensal?",
                 user_message=message,
                 authenticated=True,
@@ -553,7 +587,8 @@ class Orchestrator:
             session.current_agent = AgentType.CREDIT
             result = await self._credit_agent.get_limit(session.cpf)
             return await self._build_humanized_response(
-                session_id, session,
+                session_id,
+                session,
                 technical_message=(
                     f"Seu novo limite: R$ {result.current_limit:,.2f}\n"
                     f"Disponível: R$ {result.available_limit:,.2f}\n"
@@ -565,7 +600,8 @@ class Orchestrator:
             )
 
         return await self._build_humanized_response(
-            session_id, session,
+            session_id,
+            session,
             technical_message="Como posso ajudar?",
             user_message=message,
             authenticated=True,
@@ -591,7 +627,7 @@ class Orchestrator:
             "consultar_limite",
             "solicitar_aumento",
             "cotacao_cambio",
-            "atualizar_perfil"
+            "atualizar_perfil",
         ]
 
     def _build_response(

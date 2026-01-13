@@ -32,7 +32,9 @@ class InterviewAgent:
 
         recommendation = self._get_recommendation(final_score)
 
-        logger.info(f"Interview submitted for CPF: {cpf[:3]}***, new score: {final_score}")
+        logger.info(
+            f"Interview submitted for CPF: {cpf[:3]}***, new score: {final_score}"
+        )
 
         return InterviewResponse(
             cpf=cpf,
@@ -48,6 +50,8 @@ class InterviewAgent:
         elif score >= 600:
             return "Bom perfil! Você tem acesso aos produtos de crédito padrão."
         elif score >= 400:
-            return "Perfil moderado. Considere reduzir despesas para melhorar seu score."
+            return (
+                "Perfil moderado. Considere reduzir despesas para melhorar seu score."
+            )
         else:
             return "Seu perfil precisa de melhorias. Recomendamos uma consultoria financeira."

@@ -25,7 +25,9 @@ async def test_submit_interview_success(client: AsyncClient, valid_token: str) -
 
 
 @pytest.mark.asyncio
-async def test_submit_interview_high_income(client: AsyncClient, valid_token: str) -> None:
+async def test_submit_interview_high_income(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/interview/submit",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -46,7 +48,9 @@ async def test_submit_interview_high_income(client: AsyncClient, valid_token: st
 
 
 @pytest.mark.asyncio
-async def test_submit_interview_with_debts(client: AsyncClient, valid_token: str) -> None:
+async def test_submit_interview_with_debts(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/interview/submit",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -64,7 +68,9 @@ async def test_submit_interview_with_debts(client: AsyncClient, valid_token: str
 
 
 @pytest.mark.asyncio
-async def test_submit_interview_unemployed(client: AsyncClient, valid_token: str) -> None:
+async def test_submit_interview_unemployed(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/interview/submit",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -82,7 +88,9 @@ async def test_submit_interview_unemployed(client: AsyncClient, valid_token: str
 
 
 @pytest.mark.asyncio
-async def test_submit_interview_invalid_employment_type(client: AsyncClient, valid_token: str) -> None:
+async def test_submit_interview_invalid_employment_type(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/interview/submit",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -113,7 +121,9 @@ async def test_submit_interview_unauthorized(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_submit_interview_negative_values(client: AsyncClient, valid_token: str) -> None:
+async def test_submit_interview_negative_values(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/interview/submit",
         headers={"Authorization": f"Bearer {valid_token}"},

@@ -32,7 +32,9 @@ async def test_get_credit_limit_invalid_token(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_request_limit_increase_approved(client: AsyncClient, valid_token: str) -> None:
+async def test_request_limit_increase_approved(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/credit/request_increase",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -46,7 +48,9 @@ async def test_request_limit_increase_approved(client: AsyncClient, valid_token:
 
 
 @pytest.mark.asyncio
-async def test_request_limit_increase_same_limit(client: AsyncClient, valid_token: str) -> None:
+async def test_request_limit_increase_same_limit(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/credit/request_increase",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -58,7 +62,9 @@ async def test_request_limit_increase_same_limit(client: AsyncClient, valid_toke
 
 
 @pytest.mark.asyncio
-async def test_request_limit_increase_invalid_amount(client: AsyncClient, valid_token: str) -> None:
+async def test_request_limit_increase_invalid_amount(
+    client: AsyncClient, valid_token: str
+) -> None:
     response = await client.post(
         "/credit/request_increase",
         headers={"Authorization": f"Bearer {valid_token}"},
