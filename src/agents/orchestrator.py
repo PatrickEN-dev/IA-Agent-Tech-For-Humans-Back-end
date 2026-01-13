@@ -300,6 +300,11 @@ class Orchestrator:
                 "Deseja solicitar aumento de limite?"
             )
 
+            session.pending_redirect = RedirectAction(
+                should_redirect=True,
+                target_agent="credit_increase",
+                reason="Usuário pode querer aumentar limite após ver o atual",
+            )
             session.state = OrchestratorState.AUTHENTICATED
             return self._build_response(
                 session_id, session, response_message, authenticated=True
@@ -494,6 +499,7 @@ class Orchestrator:
                 reason="interview_completed",
                 suggested_action="check_new_limit",
             )
+            session.pending_redirect = redirect
 
             return self._build_response(
                 session_id,
@@ -595,6 +601,17 @@ class Orchestrator:
                     f"Score: {result.score}\n\n"
                     "Posso ajudar com mais alguma coisa?"
                 ),
+                user_message=message,
+                authenticated=True,
+            )
+
+        if redirect.target_agent == "credit_increase":
+            session.current_agent = AgentType.CREDIT
+            session.state = OrchestratorState.CREDIT_INCREASE_FLOW
+            return await self._build_humanized_response(
+                session_id,
+                session,
+                technical_message="Qual valor você gostaria de ter como novo limite?",
                 user_message=message,
                 authenticated=True,
             )

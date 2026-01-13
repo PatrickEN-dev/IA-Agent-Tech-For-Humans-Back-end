@@ -23,6 +23,7 @@ EMPLOYMENT_SYNONYMS = [
 ]
 
 CURRENCY_MAP = {
+    "BRL": ["brl", "real", "reais", "brasileiro"],
     "USD": ["usd", "dolar", "dollar", "dolares"],
     "EUR": ["eur", "euro", "euros"],
     "GBP": ["gbp", "libra", "libras", "esterlina", "pound"],

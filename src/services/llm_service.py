@@ -333,6 +333,12 @@ class LLMService:
         if all(s == 0 for s in scores.values()):
             return None
 
+        if scores["credit_limit"] > 0 and scores["request_increase"] > 0:
+            action_words = ["aument", "subir", "elevar", "solicitar", "pedir", "quero mais"]
+            if any(word in normalized for word in action_words):
+                logger.info("Rule-based intent: request_increase (action priority)")
+                return "request_increase"
+
         best = max(scores, key=lambda k: scores[k])
         if scores[best] > 0:
             logger.info(f"Rule-based intent: {best}")

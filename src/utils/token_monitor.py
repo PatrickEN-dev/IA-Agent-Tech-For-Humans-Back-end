@@ -23,7 +23,6 @@ class TokenMonitor:
         }
 
     def _load_usage(self) -> Dict[str, Any]:
-        """Carrega dados de uso do arquivo"""
         try:
             with open(self.usage_file, "r") as f:
                 return json.load(f)
@@ -37,7 +36,6 @@ class TokenMonitor:
             }
 
     def _save_usage(self):
-        """Salva dados de uso no arquivo"""
         try:
             with open(self.usage_file, "w") as f:
                 json.dump(self.daily_usage, f, indent=2)
@@ -50,7 +48,6 @@ class TokenMonitor:
         input_tokens: int = 0,
         output_tokens: int = 0,
     ):
-        """Registra uso de tokens em chamada da IA"""
         today = str(date.today())
 
         if today not in self.daily_usage["daily"]:
@@ -85,13 +82,11 @@ class TokenMonitor:
         return total_cost
 
     def track_cache_hit(self):
-        """Registra hit no cache (economia de tokens)"""
         self.daily_usage["cache_hits"] += 1
         self._save_usage()
         logger.info("🎯 Cache hit - tokens economizados!")
 
     def get_summary(self) -> Dict[str, Any]:
-        """Retorna resumo do uso"""
         remaining = 10.0 - self.daily_usage["total_spent"]
         today = str(date.today())
         today_usage = self.daily_usage["daily"].get(today, {})
@@ -112,7 +107,6 @@ class TokenMonitor:
         }
 
     def print_summary(self):
-        """Imprime resumo formatado"""
         summary = self.get_summary()
         print("\n" + "=" * 50)
         print("💰 RESUMO DE GASTOS - OPENAI")
