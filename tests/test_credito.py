@@ -10,7 +10,7 @@ async def test_get_credit_limit_success(client: AsyncClient, valid_token: str) -
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["cpf"] == "12345678901"
+    assert data["cpf"] == "12345678909"
     assert data["score"] == 750
     assert data["current_limit"] == 15000.0
     assert data["available_limit"] == 12000.0
@@ -42,7 +42,7 @@ async def test_request_limit_increase_approved(
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["cpf"] == "12345678901"
+    assert data["cpf"] == "12345678909"
     assert data["requested_limit"] == 20000.0
     assert data["status"] in ["approved", "pending_analysis", "denied"]
 

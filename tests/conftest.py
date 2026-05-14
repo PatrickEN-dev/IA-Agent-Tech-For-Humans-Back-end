@@ -1,62 +1,39 @@
+"""Test fixtures.
+
+Strategy:
+  - Replace the global Settings with one pointing to a tmp data dir.
+  - Seed the tmp CSV files with the data the tests expect.
+  - Reset the cached singletons in routes.py so they pick up the new Settings.
+"""
+from __future__ import annotations
+
 import os
-import shutil
-import tempfile
-from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing"
 os.environ["USE_LANGCHAIN"] = "false"
+os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing"
 
-from src.config import Settings, get_settings
+from src.api.routes import reset_orchestrator
+from src.config import Settings, set_settings_override
 from src.main import app
-from src.services.auth_service import AuthService
-
-
-ORIGINAL_DATA_DIR = Path("src/data")
-BACKUP_CLIENTS = None
-
-
-def backup_csv():
-    global BACKUP_CLIENTS
-    clients_csv = ORIGINAL_DATA_DIR / "clientes.csv"
-    if clients_csv.exists():
-        BACKUP_CLIENTS = clients_csv.read_text()
-
-
-def restore_csv():
-    global BACKUP_CLIENTS
-    if BACKUP_CLIENTS:
-        clients_csv = ORIGINAL_DATA_DIR / "clientes.csv"
-        clients_csv.write_text(BACKUP_CLIENTS)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def session_setup_teardown():
-    backup_csv()
-    yield
-    restore_csv()
-
-
-@pytest.fixture(autouse=True)
-def reset_csv_after_test():
-    yield
-    restore_csv()
+from src.services.auth import AuthService
 
 
 @pytest.fixture
 def temp_data_dir(tmp_path: Path) -> Path:
-    clients_csv = tmp_path / "clientes.csv"
-    clients_csv.write_text(
+    (tmp_path / "clientes.csv").write_text(
         "cpf,nome,data_nascimento,score,limite_atual\n"
-        "12345678901,Maria Silva,1990-05-15,750,15000.00\n"
+        "12345678909,Maria Silva,1990-05-15,750,15000.00\n"
         "98765432100,João Santos,1985-03-22,600,8000.00\n"
+        "11122233396,Ana Oliveira,1992-11-08,850,25000.00\n"
+        "55566677720,Carlos Souza,1978-07-30,450,3000.00\n"
+        "99988877714,Beatriz Lima,1995-01-12,300,500.00\n"
     )
-
-    score_csv = tmp_path / "score_limite.csv"
-    score_csv.write_text(
+    (tmp_path / "score_limite.csv").write_text(
         "score_min,score_max,limite\n"
         "0,299,500.00\n"
         "300,399,1000.00\n"
@@ -67,12 +44,9 @@ def temp_data_dir(tmp_path: Path) -> Path:
         "800,899,25000.00\n"
         "900,1000,50000.00\n"
     )
-
-    requests_csv = tmp_path / "solicitacoes_aumento_limite.csv"
-    requests_csv.write_text(
+    (tmp_path / "solicitacoes_aumento_limite.csv").write_text(
         "cpf_cliente,data_hora_solicitacao,limite_atual,novo_limite_solicitado,status_pedido\n"
     )
-
     return tmp_path
 
 
@@ -85,6 +59,16 @@ def test_settings(temp_data_dir: Path) -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def apply_settings(test_settings: Settings):
+    """Inject the test Settings globally and reset the cached singletons."""
+    set_settings_override(test_settings)
+    reset_orchestrator()
+    yield
+    set_settings_override(None)
+    reset_orchestrator()
+
+
 @pytest.fixture
 def auth_service(test_settings: Settings) -> AuthService:
     return AuthService(test_settings)
@@ -92,15 +76,11 @@ def auth_service(test_settings: Settings) -> AuthService:
 
 @pytest.fixture
 def valid_token(auth_service: AuthService) -> str:
-    return auth_service.create_token("12345678901")
+    return auth_service.create_token("12345678909")
 
 
 @pytest.fixture
-async def client(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> AsyncGenerator[AsyncClient, None]:
-    monkeypatch.setattr("src.config.get_settings", lambda: test_settings)
-
+async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test/api") as ac:
         yield ac

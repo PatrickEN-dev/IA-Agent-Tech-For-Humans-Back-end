@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -8,8 +10,7 @@ from jose import JWTError, jwt
 from src.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
-
-security = HTTPBearer()
+_security = HTTPBearer()
 
 
 class AuthService:
@@ -17,13 +18,11 @@ class AuthService:
         self._settings = settings or get_settings()
 
     def create_token(self, cpf: str) -> str:
-        expires = datetime.now(timezone.utc) + timedelta(
-            minutes=self._settings.jwt_expiration_minutes
-        )
+        now = datetime.now(timezone.utc)
         payload = {
             "sub": cpf,
-            "exp": expires,
-            "iat": datetime.now(timezone.utc),
+            "iat": now,
+            "exp": now + timedelta(minutes=self._settings.jwt_expiration_minutes),
         }
         return jwt.encode(
             payload,
@@ -38,27 +37,21 @@ class AuthService:
                 self._settings.jwt_secret_key,
                 algorithms=[self._settings.jwt_algorithm],
             )
-            cpf: str | None = payload.get("sub")
-            if cpf is None:
-                return None
-            return cpf
-        except JWTError as e:
-            logger.warning(f"Token verification failed: {e}")
+        except JWTError as exc:
+            logger.warning("Token verification failed: %s", exc)
             return None
+        return payload.get("sub")
 
 
 def get_current_cpf(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
     settings: Settings = Depends(get_settings),
 ) -> str:
-    auth_service = AuthService(settings)
-    cpf = auth_service.verify_token(credentials.credentials)
-
+    cpf = AuthService(settings).verify_token(credentials.credentials)
     if cpf is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     return cpf

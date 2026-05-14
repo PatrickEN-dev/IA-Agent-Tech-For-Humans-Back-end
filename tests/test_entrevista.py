@@ -17,7 +17,7 @@ async def test_submit_interview_success(client: AsyncClient, valid_token: str) -
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["cpf"] == "12345678901"
+    assert data["cpf"] == "12345678909"
     assert data["previous_score"] == 750
     assert "new_score" in data
     assert "recommendation" in data

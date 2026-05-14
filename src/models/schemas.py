@@ -1,13 +1,33 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+EmploymentType = Literal["CLT", "FORMAL", "PUBLICO", "AUTONOMO", "MEI", "DESEMPREGADO"]
+LimitStatus = Literal["approved", "pending_analysis", "denied"]
+
+# Hard ceiling for any monetary input from the user. Higher than this is
+# almost certainly a typo and exceeds any reasonable consumer-credit policy.
+MAX_MONEY_INPUT: float = 1_000_000.0
+MIN_BIRTH_YEAR: int = 1900
 
 
 class AuthRequest(BaseModel):
     cpf: str = Field(..., min_length=11, max_length=14)
     birthdate: date
-    user_message: str | None = None
+    user_message: str | None = Field(default=None, max_length=500)
+
+    @field_validator("birthdate")
+    @classmethod
+    def _birthdate_in_range(cls, value: date) -> date:
+        today = date.today()
+        if value > today:
+            raise ValueError("birthdate cannot be in the future")
+        if value.year < MIN_BIRTH_YEAR:
+            raise ValueError("birthdate year is unrealistic")
+        return value
 
 
 class AuthResponse(BaseModel):
@@ -25,22 +45,22 @@ class CreditLimitResponse(BaseModel):
 
 
 class LimitIncreaseRequest(BaseModel):
-    new_limit: float = Field(..., gt=0)
+    new_limit: float = Field(..., gt=0, le=MAX_MONEY_INPUT)
 
 
 class LimitIncreaseResponse(BaseModel):
     cpf: str
     requested_limit: float
-    status: Literal["approved", "pending_analysis", "denied"]
+    status: LimitStatus
     message: str
     offer_interview: bool = False
     interview_message: str | None = None
 
 
 class InterviewRequest(BaseModel):
-    renda_mensal: float = Field(..., ge=0)
-    tipo_emprego: Literal["CLT", "FORMAL", "PUBLICO", "AUTONOMO", "MEI", "DESEMPREGADO"]
-    despesas: float = Field(..., ge=0)
+    renda_mensal: float = Field(..., ge=0, le=MAX_MONEY_INPUT)
+    tipo_emprego: EmploymentType
+    despesas: float = Field(..., ge=0, le=MAX_MONEY_INPUT)
     num_dependentes: int = Field(..., ge=0, le=20)
     tem_dividas: bool
 
@@ -50,7 +70,7 @@ class InterviewResponse(BaseModel):
     previous_score: int
     new_score: int
     recommendation: str
-    redirect_to: str
+    redirect_to: str = "/credit/limit"
 
 
 class ExchangeRateResponse(BaseModel):
@@ -61,26 +81,6 @@ class ExchangeRateResponse(BaseModel):
     message: str
 
 
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-
-
-class ChatRequest(BaseModel):
-    session_id: str | None = None
-    message: str
-    conversation_history: list[ChatMessage] = []
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    message: str
-    state: str
-    authenticated: bool = False
-    token: str | None = None
-    data: dict | None = None
-
-
 class RedirectAction(BaseModel):
     should_redirect: bool = False
     target_agent: str | None = None
@@ -88,32 +88,25 @@ class RedirectAction(BaseModel):
     suggested_action: str | None = None
 
 
-class OrchestratorRequest(BaseModel):
-    session_id: str
-    intent: str
-    data: dict | None = None
-
-
-class OrchestratorResponse(BaseModel):
-    session_id: str
-    agent_used: str
-    result: dict
-    redirect: RedirectAction | None = None
-    message: str
-    next_steps: list[str] = []
-
-
-class UnifiedChatRequest(BaseModel):
+class ChatRequest(BaseModel):
     session_id: str | None = None
-    message: str
+    message: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("message")
+    @classmethod
+    def _strip_and_require(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("message must not be empty")
+        return stripped
 
 
-class UnifiedChatResponse(BaseModel):
+class ChatResponse(BaseModel):
     session_id: str
     message: str
     state: str
+    current_agent: str
     authenticated: bool = False
     token: str | None = None
-    current_agent: str
     available_actions: list[str] = []
     redirect_suggestion: RedirectAction | None = None

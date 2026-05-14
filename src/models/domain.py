@@ -1,26 +1,20 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from datetime import date
 
 
-@dataclass
+@dataclass(frozen=True)
 class Client:
     cpf: str
-    nome: str
-    data_nascimento: str
+    name: str
+    birthdate: date
     score: int
-    limite_atual: float
+    current_limit: float
 
 
-@dataclass
+@dataclass(frozen=True)
 class ScoreLimit:
     score_min: int
     score_max: int
-    limite: float
-
-
-@dataclass
-class LimitRequest:
-    cpf_cliente: str
-    data_hora_solicitacao: str
-    limite_atual: float
-    novo_limite_solicitado: float
-    status_pedido: str
+    limit: float
