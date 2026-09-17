@@ -39,13 +39,14 @@ O **Agente Bancario Inteligente** é um sistema de atendimento digital que utili
         ▼                   ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Service Layer                               │
-│    AuthService │ CSVService │ ScoreService │ LLMService          │
+│  AuthService │ ScoreService │ LLMService │ SignupService │ ...   │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Data Layer                                 │
-│        clientes.csv │ score_limite.csv │ solicitacoes.csv        │
+│  Repositorios -> SQLAlchemy async -> SQLite / Postgres           │
+│  clients | score_limits | limit_requests | score_events          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -180,7 +181,8 @@ AUTHENTICATED ◄─────────────────────
 **Funcionamento**:
 1. Recebe CPF do usuario (com ou sem formatacao)
 2. Normaliza o CPF (remove pontos e tracos)
-3. Busca cliente no arquivo `clientes.csv`
+3. Valida os digitos verificadores (`src/utils/cpf.py`) antes de consultar a base
+4. Busca o cliente no repositorio
 4. Valida data de nascimento
 5. Gera token JWT em caso de sucesso
 6. Controla tentativas (maximo 3)
@@ -197,16 +199,20 @@ AUTHENTICATED ◄─────────────────────
 **Funcionamento - Consulta**:
 1. Recebe CPF do token JWT
 2. Busca score do cliente
-3. Consulta tabela `score_limite.csv` para determinar limite
-4. Retorna limite atual e disponivel (80% do total)
+3. Le o limite concedido, persistido no cliente
+4. Consulta a faixa de score para o teto que aquele score sustenta
+5. Retorna limite atual, score e teto. Nao existe "disponivel": o MVP nao tem
+   extrato de compras, e um percentual fixo seria um numero inventado
 
 **Funcionamento - Aumento**:
-1. Recebe valor solicitado
-2. Compara com limite maximo para o score atual
-3. Aprova se solicitado <= maximo permitido
-4. Nega se solicitado > maximo permitido
-5. Registra solicitacao em `solicitacoes_aumento_limite.csv`
-6. Se negado, oferece entrevista para melhorar score
+1. Recebe o valor solicitado
+2. Compara com o limite atual e com o teto da faixa de score
+3. Ate o teto: aprovado, e o limite persistido passa a ser o valor pedido
+4. Entre o teto e 1,5x o teto, com score >= 600: `pending_analysis` (registrado,
+   limite inalterado)
+5. Acima disso: negado, com oferta de entrevista
+6. Registra o pedido na tabela `limit_requests` com o motivo da decisao e o score
+   do momento
 
 #### 3. Agente de Entrevista (entrevista.py)
 
@@ -305,8 +311,8 @@ score_final = clamp(soma_componentes, 0, 1000)
 ```json
 {
   "cpf": "12345678909",
-  "current_limit": 15000.0,
-  "available_limit": 12000.0,
+  "current_limit": 5000.0,
+  "max_limit_for_score": 15000.0,
   "score": 750
 }
 ```
@@ -414,25 +420,35 @@ Posso ajudar com mais alguma coisa?
 
 ## Persistencia de Dados
 
-### Arquivos CSV
+### Banco relacional
 
-| Arquivo | Descricao | Campos |
-|---------|-----------|--------|
-| `clientes.csv` | Base de clientes | cpf, nome, data_nascimento, score, limite_atual |
-| `score_limite.csv` | Tabela score x limite | score_min, score_max, limite |
-| `solicitacoes_aumento_limite.csv` | Log de solicitacoes | cpf, data_hora, limite_atual, novo_limite, status |
+Os CSVs do desafio deixaram de ser o banco e passaram a ser o **seed**. O que roda e
+SQLAlchemy 2 async: `aiosqlite` local, `asyncpg` em producao, selecionado por
+`DATABASE_URL`.
 
-### Thread Safety
+| Tabela | Descricao |
+|--------|-----------|
+| `clients` | Clientes: cpf, nome, nascimento, score, limite_atual, origem, is_demo_persona |
+| `score_limits` | Faixas de score e o teto de limite de cada uma |
+| `limit_requests` | Cada pedido de aumento, com status, motivo e o score do momento |
+| `score_events` | Historico de mudanca de score, com a origem (entrevista, manual) |
 
-Operacoes de escrita em CSV usam `FileLock` para garantir acesso exclusivo:
+### Camada de repositorios
 
-```python
-from filelock import FileLock
+Os agentes nunca importam SQLAlchemy: eles falam com `ClientRepository`,
+`ScoreLimitRepository` e `LimitRequestRepository`, que devolvem dataclasses de dominio.
+Trocar SQLite por Postgres, ou por um duble em teste, nao toca em regra de negocio.
 
-lock = FileLock(f"{filepath}.lock", timeout=10)
-with lock:
-    # operacao segura no arquivo
-```
+Cada metodo abre e fecha sua propria unidade de trabalho (commit no sucesso, rollback em
+qualquer excecao). Onde uma operacao precisa ser atomica de ponta a ponta — alterar o
+score e gravar o evento que o explica — ela vive em um unico metodo, em uma transacao.
+
+### Seed e reset
+
+`scripts/seed.py` carrega os CSVs. Com `DEMO_RESET_ON_START=true` o `lifespan` roda o
+seed a cada boot, o que e o comportamento desejado na demonstracao: o disco do plano
+gratuito do Render e efemero de qualquer jeito, e todo visitante encontra a mesma base
+limpa. Em producao, `false` e Postgres externo.
 
 ---
 
@@ -471,7 +487,13 @@ with lock:
 | `OPENAI_API_KEY` | Chave API OpenAI | - |
 | `ANTHROPIC_API_KEY` | Chave API Anthropic | - |
 | `EXCHANGE_API_URL` | URL API de cambio | api.exchangerate-api.com |
-| `DATA_DIR` | Diretorio dos CSVs | src/data |
+| `DATA_DIR` | Diretorio dos CSVs usados como seed | src/data |
+| `DATABASE_URL` | SQLite local ou Postgres | sqlite+aiosqlite:///./data/banco_agil.db |
+| `DEMO_RESET_ON_START` | Recria o banco pelo seed a cada boot | true |
+| `DEMO_MODE` / `SIGNUP_ENABLED` | Personas e auto-cadastro | true / true |
+| `CPF_PROVIDER` | `mock` (offline) ou `serpro` | mock |
+| `RATE_LIMIT_ENABLED` | Limite de requisicoes por IP | true |
+| `JSON_LOGS` | Log estruturado, filtravel por request_id | false |
 | `LOG_LEVEL` | Nivel de log | INFO |
 
 ---
@@ -573,7 +595,9 @@ IA-Agent-Tech-For-Humans-Back-end/
 │   │
 │   ├── services/
 │   │   ├── auth_service.py  # JWT
-│   │   ├── csv_service.py   # Persistencia
+│   │   ├── signup_service.py # Auto-cadastro
+│   │   ├── cpf_provider.py   # Verificacao de CPF (mock / Serpro)
+│   │   ├── address_service.py# Consulta de CEP (BrasilAPI)
 │   │   ├── llm_service.py   # Integracao LLM
 │   │   └── score_service.py # Calculo score
 │   │
@@ -589,9 +613,8 @@ IA-Agent-Tech-For-Humans-Back-end/
 │   │   └── value_extractor.py # Extratores
 │   │
 │   └── data/
-│       ├── clientes.csv
-│       ├── score_limite.csv
-│       └── solicitacoes_aumento_limite.csv
+│       ├── clientes.csv     # seed
+│       └── score_limite.csv  # seed
 │
 └── tests/
     ├── conftest.py          # Fixtures
@@ -603,8 +626,118 @@ IA-Agent-Tech-For-Humans-Back-end/
     ├── test_conversation_ux.py  # Cenarios de conversa (intencao antes do login, cambio direto, escapes)
     ├── test_conversation_improvements.py  # Oferta respondida com valor, sessao expirada, resiliencia
     ├── test_intent_rules.py     # Classificacao por regras e fronteira de palavra
-    └── test_integration.py
+    ├── test_cpf.py              # Digitos verificadores, incluindo o CSV de producao
+    ├── test_demo.py             # Personas e login em um clique
+    ├── test_signup.py           # Auto-cadastro por endpoint e por conversa
+    ├── test_observability.py    # Retomada de sessao, telemetria, request id
+    └── test_prompt_injection.py # Guarda deterministico da humanizacao
 ```
+
+---
+
+## Verificacao de CPF
+
+Nao existe API publica e gratuita que devolva nome e data de nascimento a partir de um
+CPF no Brasil. As fontes legitimas (Serpro Consulta CPF / Datavalid, bureaus como
+BigDataCorp ou Idwall) sao pagas e exigem contrato com CNPJ; as "gratuitas" que aparecem
+em buscas sao bases vazadas, e usa-las viola a LGPD.
+
+Por isso `src/services/cpf_provider.py` define uma porta com dois adaptadores:
+
+| `CPF_PROVIDER` | Comportamento |
+|----------------|---------------|
+| `mock` (padrao) | Valida digitos verificadores. Offline, deterministico, responde "situacao cadastral desconhecida" — que e exatamente o que o sistema sabe sem consultar a Receita |
+| `serpro` | Adaptador escrito contra o contrato publicado do Serpro. Exige `SERPRO_API_TOKEN`; qualquer falha de rede ou autorizacao degrada para o `mock` em vez de derrubar o cadastro |
+
+A aritmetica roda antes da chamada externa, entao um CPF invalido nunca gasta uma
+requisicao paga.
+
+A integracao externa que **e** real e gratuita neste projeto e a consulta de CEP
+(BrasilAPI): publica, sem chave e sem dado pessoal. Ela preenche cidade e estado no
+auto-cadastro, e qualquer indisponibilidade deixa o endereco vazio sem bloquear o
+cadastro.
+
+---
+
+## Seguranca
+
+### Autenticacao
+
+CPF + data de nascimento nao e autenticacao forte. E a restricao do desafio, e esta
+documentada como tal. As mitigacoes:
+
+- **Tentativas contadas por CPF, nao por sessao** (`AuthAttemptTracker`, compartilhado
+  entre o chat e o endpoint). Abrir uma aba nova nao zera o contador de quem esta
+  chutando CPF alheio.
+- **Bloqueio com janela de expiracao** (`AUTH_LOCKOUT_MINUTES`): sem isso, tres erros de
+  terceiros trancariam um CPF ate o processo reiniciar.
+- **Rate limit por IP** em `/unified/chat` (60/min), `/triage/authenticate` (10/min) e
+  `/signup` (5/min), desligavel por `RATE_LIMIT_ENABLED` — a suite de testes o desliga.
+- **CPF mascarado em todo log** (`529.***.***-25`), via `src/utils/cpf.py`.
+- **JWT de 15 minutos** para os endpoints diretos.
+
+### Prompt injection
+
+A humanizacao recebe a mensagem do cliente, entao e o ponto do sistema exposto a
+injecao. O guarda e deterministico, nao uma instrucao no prompt — pedir ao modelo para
+nao se deixar enganar e um pedido, nao um controle.
+
+`LLMService._preserves_facts(tecnica, humanizada)` extrai valores em R$, datas, codigos
+de moeda e numeros da resposta tecnica e exige que todos sobrevivam a reescrita; alem
+disso, rejeita qualquer valor monetario que apareca so na versao humanizada. Se a
+verificacao falhar, vale o template.
+
+Consequencia: um modelo totalmente comprometido nao consegue dizer ao cliente que o
+limite dele e R$ 1.000.000,00. `tests/test_prompt_injection.py` injeta um `LLMService`
+sequestrado e verifica isso sem chamar LLM nenhum.
+
+### Cabecalhos
+
+No front (`next.config.mjs`): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` negando camera,
+microfone, geolocalizacao e pagamento, e `poweredByHeader` desligado.
+
+Nao ha CSP de proposito: o `next/font` injeta estilos inline, e uma CSP com
+`unsafe-inline` escrita sem testar cada build nao protegeria nada.
+
+---
+
+## Observabilidade
+
+- **Request id**: um middleware gera (ou reaproveita) `X-Request-ID` e o propaga por
+  `contextvars` para todos os logs daquele turno. Sem ele, investigar "a conversa do
+  fulano travou" em um log concorrente e impossivel: as linhas de varias sessoes se
+  intercalam.
+- **Log estruturado**: `JSON_LOGS=true` troca o formato alinhado por JSON de uma linha
+  por evento, filtravel por `request_id`. Sem dependencia nova: `json.dumps` no
+  `format`.
+- **Telemetria de turno**: `Orchestrator.process_message` mede o tempo do turno e se ele
+  custou uma chamada ao modelo. `/health` expoe `turns_total`, `llm_turns_total` e
+  `llm_turn_ratio`.
+
+O contador existe para que a afirmacao "a maioria das mensagens nao chega ao modelo"
+seja medida e nao estimada. A estimativa envelhece a cada regra nova de classificacao.
+
+---
+
+## Avaliacao do classificador
+
+`evals/intents.jsonl` tem 102 frases rotuladas a mao, cobrindo os 10 rotulos e variacoes
+informais. `scripts/eval_intents.py` mede a acuracia de regras, LLM e hibrido, imprime a
+matriz de confusao, a acuracia por rotulo e as frases que erraram.
+
+```
+Regras (0 ms, sem rede)
+  acuracia:   91.2%  (93/102)
+  cobertura:  87.3%  (abstencoes: 13)
+```
+
+Nove dos dez rotulos ficam em 100%. O unico que as regras nao cobrem e `off_topic`: elas
+se abstem de proposito, e e esse resto que justifica o LLM na arquitetura hibrida.
+
+Sem `--llm` o script nao faz nenhuma chamada externa, entao roda no CI, que trava a
+acuracia em 90%. A primeira execucao encontrou quatro bugs reais de classificacao — o
+mais grave deles, "boa tarde" sendo interpretado como aceitar a oferta pendente.
 
 ---
 
