@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -69,14 +69,14 @@ class ExchangeAgent:
         self, from_currency: str, to_currency: str
     ) -> tuple[float, datetime, str]:
         if from_currency == to_currency:
-            return 1.0, datetime.now(timezone.utc), "live"
+            return 1.0, datetime.now(UTC), "live"
 
         cache_key = f"{from_currency}_{to_currency}"
         cached = self._rate_cache.get(cache_key)
         if cached:
             rate, cached_time = cached
             if (
-                datetime.now(timezone.utc) - cached_time
+                datetime.now(UTC) - cached_time
             ).total_seconds() < self._cache_ttl_seconds:
                 return rate, cached_time, "cached"
 
@@ -90,7 +90,7 @@ class ExchangeAgent:
                 rates = data.get("rates") or {}
                 if to_currency in rates:
                     rate = float(rates[to_currency])
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     self._rate_cache[cache_key] = (rate, now)
                     logger.info(
                         f"Exchange rate fetched: {from_currency}/{to_currency} = {rate}"
@@ -102,7 +102,7 @@ class ExchangeAgent:
 
         rate = self._get_fallback_rate(from_currency, to_currency)
         logger.warning(f"Using fallback rate for {from_currency}/{to_currency}")
-        return rate, datetime.now(timezone.utc), "fallback"
+        return rate, datetime.now(UTC), "fallback"
 
     def _get_fallback_rate(self, from_currency: str, to_currency: str) -> float:
         if from_currency == to_currency:

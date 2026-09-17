@@ -10,7 +10,7 @@ class TestTriageAgent:
 
         response = await client.post(
             "/unified/chat",
-            json={"session_id": session_id, "message": "123 456 789 01"},
+            json={"session_id": session_id, "message": "123 456 789 09"},
         )
         data = response.json()
         assert data["state"] == "collecting_birthdate"
@@ -22,7 +22,7 @@ class TestTriageAgent:
 
         response = await client.post(
             "/unified/chat",
-            json={"session_id": session_id, "message": "meu cpf é 12345678901"},
+            json={"session_id": session_id, "message": "meu cpf é 12345678909"},
         )
         data = response.json()
         assert data["state"] == "collecting_birthdate"
@@ -34,7 +34,7 @@ class TestTriageAgent:
 
         await client.post(
             "/unified/chat",
-            json={"session_id": session_id, "message": "12345678901"},
+            json={"session_id": session_id, "message": "12345678909"},
         )
 
         response = await client.post(
@@ -56,7 +56,9 @@ class TestCreditAgent:
         )
         data = response.json()
         assert data["current_limit"] > 0
-        assert data["available_limit"] == data["current_limit"] * 0.8
+        # Nao existe mais "disponivel" inventado; o que existe e o teto do score.
+        assert "available_limit" not in data
+        assert data["max_limit_for_score"] >= data["current_limit"]
 
     @pytest.mark.asyncio
     async def test_request_increase_zero_value(
@@ -361,7 +363,7 @@ class TestFlowTransitions:
         session_id = init.json()["session_id"]
 
         await client.post(
-            "/unified/chat", json={"session_id": session_id, "message": "12345678901"}
+            "/unified/chat", json={"session_id": session_id, "message": "12345678909"}
         )
         await client.post(
             "/unified/chat", json={"session_id": session_id, "message": "15/05/1990"}
@@ -387,7 +389,7 @@ class TestFlowTransitions:
         session_id = init.json()["session_id"]
 
         await client.post(
-            "/unified/chat", json={"session_id": session_id, "message": "12345678901"}
+            "/unified/chat", json={"session_id": session_id, "message": "12345678909"}
         )
         await client.post(
             "/unified/chat", json={"session_id": session_id, "message": "15/05/1990"}
@@ -425,7 +427,7 @@ class TestFlowTransitions:
         session_id = init.json()["session_id"]
 
         await client.post(
-            "/unified/chat", json={"session_id": session_id, "message": "12345678901"}
+            "/unified/chat", json={"session_id": session_id, "message": "12345678909"}
         )
         await client.post(
             "/unified/chat", json={"session_id": session_id, "message": "15/05/1990"}

@@ -1,8 +1,7 @@
 import re
-from typing import Literal, Optional
+from typing import Literal
 
 from src.utils.text_normalizer import contains_any, normalize_text
-
 
 NUMBERS_MAP = {
     "zero": 0, "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3,
@@ -49,7 +48,7 @@ LEADING_FILLER = (
 )
 
 
-def _find_number_word(normalized: str, *, allow_ambiguous: bool) -> Optional[int]:
+def _find_number_word(normalized: str, *, allow_ambiguous: bool) -> int | None:
     for word, number in NUMBERS_MAP.items():
         if not allow_ambiguous and word in AMBIGUOUS_NUMBER_WORDS:
             continue
@@ -58,7 +57,7 @@ def _find_number_word(normalized: str, *, allow_ambiguous: bool) -> Optional[int
     return None
 
 
-def extract_monetary_value(text: str) -> Optional[float]:
+def extract_monetary_value(text: str) -> float | None:
     if not text:
         return None
 
@@ -107,7 +106,7 @@ def extract_monetary_value(text: str) -> Optional[float]:
 ZERO_PATTERNS = ["nenhum", "nenhuma", "zero", "nao tenho", "sem", "nao possuo", "nada", "ninguem"]
 
 
-def extract_integer(text: str) -> Optional[int]:
+def extract_integer(text: str) -> int | None:
     if not text:
         return None
 
@@ -123,7 +122,7 @@ def extract_integer(text: str) -> Optional[int]:
     return _find_number_word(normalized, allow_ambiguous=True)
 
 
-def extract_employment_type(text: str) -> Optional[EmploymentType]:
+def extract_employment_type(text: str) -> EmploymentType | None:
     if not text:
         return None
 
@@ -167,6 +166,6 @@ def extract_currency_codes(text: str) -> list[str]:
     return result
 
 
-def extract_currency_code(text: str) -> Optional[str]:
+def extract_currency_code(text: str) -> str | None:
     codes = extract_currency_codes(text)
     return codes[0] if codes else None

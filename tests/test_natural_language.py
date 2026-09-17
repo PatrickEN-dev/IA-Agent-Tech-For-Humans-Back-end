@@ -5,22 +5,20 @@ Testa a extração de valores, normalização de texto e parsing
 de respostas em linguagem natural.
 """
 
-import pytest
+from src.services.llm_service import NaturalLanguageParser
 from src.utils.text_normalizer import (
-    normalize_text,
-    remove_accents,
     extract_cpf_from_text,
+    normalize_text,
     parse_boolean_response,
     parse_date_from_text,
-    get_clarification_message,
+    remove_accents,
 )
 from src.utils.value_extractor import (
-    extract_monetary_value,
-    extract_integer,
-    extract_employment_type,
     extract_currency_code,
+    extract_employment_type,
+    extract_integer,
+    extract_monetary_value,
 )
-from src.services.llm_service import NaturalLanguageParser
 
 
 class TestTextNormalizer:
@@ -38,14 +36,14 @@ class TestTextNormalizer:
         assert normalize_text("Açúcar") == "acucar"
 
     def test_extract_cpf_from_text(self):
-        assert extract_cpf_from_text("12345678901") == "12345678901"
+        assert extract_cpf_from_text("12345678909") == "12345678909"
 
-        assert extract_cpf_from_text("123.456.789-01") == "12345678901"
+        assert extract_cpf_from_text("123.456.789-09") == "12345678909"
 
-        assert extract_cpf_from_text("123 456 789 01") == "12345678901"
+        assert extract_cpf_from_text("123 456 789 09") == "12345678909"
 
-        assert extract_cpf_from_text("meu cpf é 123.456.789-01") == "12345678901"
-        assert extract_cpf_from_text("o cpf 12345678901 aqui") == "12345678901"
+        assert extract_cpf_from_text("meu cpf é 123.456.789-09") == "12345678909"
+        assert extract_cpf_from_text("o cpf 12345678909 aqui") == "12345678909"
 
         assert extract_cpf_from_text("não sei meu cpf") is None
         assert extract_cpf_from_text("12345") is None

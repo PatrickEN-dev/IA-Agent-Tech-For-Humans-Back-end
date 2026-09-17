@@ -25,7 +25,34 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
+    "ruff>=0.6.0",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["venv", ".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: ordenação de imports, UP: sintaxe moderna,
+# B: armadilhas do bugbear (mutável como default, except sem uso), C4: comprehensions.
+select = ["E", "W", "F", "I", "UP", "B", "C4"]
+ignore = [
+    # Linha longa fica a cargo do formatador; quebrar strings de mensagem para o
+    # cliente prejudica mais a leitura do que ajuda.
+    "E501",
+    # `class X(str, Enum)` é intencional: mantém a serialização como string no Pydantic
+    # e nas comparações com os valores que chegam do front.
+    "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Os testes montam o ambiente antes de importar `src`, então os imports não ficam no topo.
+"tests/conftest.py" = ["E402"]
+"scripts/*.py" = ["E402"]
+# `Depends(...)` como default é a forma como o FastAPI declara dependências.
+"src/services/auth_service.py" = ["B008"]
+"src/api/routes.py" = ["B008"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

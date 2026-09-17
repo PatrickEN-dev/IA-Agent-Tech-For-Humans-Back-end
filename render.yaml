@@ -11,6 +11,31 @@ services:
         value: HS256
       - key: JWT_EXPIRATION_MINUTES
         value: "15"
+
+      # O disco do plano gratuito é efêmero: o SQLite é recriado a partir dos CSVs a
+      # cada deploy, o que para uma demonstração é vantagem (dados sempre limpos).
+      # Para produção, trocar por um Postgres externo e DEMO_RESET_ON_START=false.
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/banco_agil.db
+      - key: DEMO_RESET_ON_START
+        value: "true"
+      - key: DATA_DIR
+        value: src/data
+
+      - key: DEMO_MODE
+        value: "true"
+      - key: SIGNUP_ENABLED
+        value: "true"
+
+      - key: CPF_PROVIDER
+        value: mock
+      - key: SERPRO_API_TOKEN
+        sync: false
+      - key: ADDRESS_API_URL
+        value: https://brasilapi.com.br/api/cep/v2
+      - key: EXCHANGE_API_URL
+        value: https://api.exchangerate-api.com/v4/latest
+
       - key: USE_LANGCHAIN
         value: "true"
       - key: LLM_PROVIDER
@@ -19,9 +44,14 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: EXCHANGE_API_URL
-        value: https://api.exchangerate-api.com/v4/latest
+
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+
       - key: LOG_LEVEL
         value: INFO
-      - key: DATA_DIR
-        value: src/data
+      - key: JSON_LOGS
+        value: "true"
+      # Domínios do front. Trocar por uma lista fechada quando houver domínio próprio.
+      - key: CORS_ORIGINS
+        value: "*"

@@ -1,8 +1,8 @@
 """Classificação de intenção por regras e correções de fronteira de palavra."""
 
-import pytest
+from datetime import UTC, datetime
 
-from datetime import datetime, timezone
+import pytest
 
 from src.services.llm_service import LLMService
 from src.utils.formatting import format_brl, format_datetime_brt, format_rate
@@ -118,7 +118,7 @@ def test_format_rate_uses_brazilian_separators() -> None:
 
 
 def test_format_datetime_in_brasilia_time() -> None:
-    utc_moment = datetime(2026, 9, 17, 15, 12, tzinfo=timezone.utc)
+    utc_moment = datetime(2026, 9, 17, 15, 12, tzinfo=UTC)
     assert format_datetime_brt(utc_moment) == "17/09/2026 12:12"
     naive_moment = datetime(2026, 9, 17, 15, 12)
     assert format_datetime_brt(naive_moment) == "17/09/2026 12:12"

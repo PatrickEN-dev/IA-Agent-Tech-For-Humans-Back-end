@@ -12,6 +12,24 @@ class AuthenticationError(HTTPException):
         )
 
 
+class InvalidCPFError(HTTPException):
+    """CPF sintaticamente invalido: nao chega a consultar a base.
+
+    Separado de `AuthenticationError` de proposito: "esse numero nao e um CPF"
+    e uma informacao util e nao revela nada sobre quem esta cadastrado.
+    """
+
+    def __init__(self, remaining_attempts: int) -> None:
+        super().__init__(
+            # 422 literal: o nome da constante foi depreciado no Starlette recente.
+            status_code=422,
+            detail={
+                "message": "CPF is not valid (check digits failed)",
+                "remaining_attempts": remaining_attempts,
+            },
+        )
+
+
 class MaxAttemptsExceededError(HTTPException):
     def __init__(self) -> None:
         super().__init__(

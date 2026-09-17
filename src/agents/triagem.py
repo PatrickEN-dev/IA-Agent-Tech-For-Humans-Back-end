@@ -1,81 +1,69 @@
 import logging
-import time
-from dataclasses import dataclass
 from datetime import date
 
 from src.config import get_settings
+from src.db.repositories import ClientRepository
 from src.models.schemas import AuthRequest, AuthResponse
+from src.services.auth_attempts import AuthAttemptTracker, auth_attempt_tracker
 from src.services.auth_service import AuthService
-from src.services.csv_service import CSVService
 from src.services.llm_service import LLMService
-from src.utils.exceptions import AuthenticationError, MaxAttemptsExceededError
+from src.utils.cpf import is_valid_cpf, mask_cpf
+from src.utils.exceptions import (
+    AuthenticationError,
+    InvalidCPFError,
+    MaxAttemptsExceededError,
+)
 from src.utils.text_normalizer import normalize_cpf
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _AttemptRecord:
-    failures: int = 0
-    last_failure: float = 0.0
-
-
 class TriageAgent:
     """Autenticacao por CPF + data de nascimento com limite de tentativas por CPF.
 
-    O bloqueio expira depois de `auth_lockout_minutes`: sem isso, tres erros
-    (inclusive de terceiros) trancariam o CPF ate o processo reiniciar.
+    A contagem de tentativas vive no `AuthAttemptTracker`, compartilhado com o chat:
+    trocar de canal (ou abrir sessao nova) nao zera o contador.
     """
 
     def __init__(
         self,
-        csv_service: CSVService | None = None,
+        client_repository: ClientRepository | None = None,
         auth_service: AuthService | None = None,
         llm_service: LLMService | None = None,
+        attempt_tracker: AuthAttemptTracker | None = None,
     ) -> None:
         self._settings = get_settings()
-        self._csv_service = csv_service or CSVService()
+        self._clients = client_repository or ClientRepository()
         self._auth_service = auth_service or AuthService()
         self._llm_service = llm_service or LLMService()
-        self._attempts: dict[str, _AttemptRecord] = {}
-
-    def _record_for(self, cpf: str) -> _AttemptRecord:
-        record = self._attempts.get(cpf)
-        if record is None:
-            record = _AttemptRecord()
-            self._attempts[cpf] = record
-            return record
-
-        lockout_seconds = self._settings.auth_lockout_minutes * 60
-        if record.failures and time.monotonic() - record.last_failure > lockout_seconds:
-            record.failures = 0
-        return record
-
-    def _register_failure(self, record: _AttemptRecord) -> int:
-        record.failures += 1
-        record.last_failure = time.monotonic()
-        return max(0, self._settings.max_auth_attempts - record.failures)
+        self._attempts = attempt_tracker or auth_attempt_tracker
 
     async def authenticate(self, request: AuthRequest) -> AuthResponse:
         cpf = normalize_cpf(request.cpf)
-        record = self._record_for(cpf)
 
-        if record.failures >= self._settings.max_auth_attempts:
-            logger.warning(f"Max attempts exceeded for CPF: {cpf[:3]}***")
+        if self._attempts.is_locked(cpf):
+            logger.warning("Max attempts exceeded for CPF: %s", mask_cpf(cpf))
             raise MaxAttemptsExceededError()
 
-        client = await self._csv_service.get_client_by_cpf(cpf)
+        if not is_valid_cpf(cpf):
+            remaining = self._attempts.register_failure(cpf)
+            logger.info("Invalid CPF check digits: %s", mask_cpf(cpf))
+            raise InvalidCPFError(remaining_attempts=remaining)
+
+        client = await self._clients.get_by_cpf(cpf)
 
         if not client:
-            remaining = self._register_failure(record)
-            logger.info(f"Client not found: {cpf[:3]}***, attempts remaining: {remaining}")
+            remaining = self._attempts.register_failure(cpf)
+            logger.info("Client not found: %s, attempts remaining: %s", mask_cpf(cpf), remaining)
             raise AuthenticationError(remaining_attempts=remaining)
 
         client_birthdate = date.fromisoformat(client.data_nascimento)
         if client_birthdate != request.birthdate:
-            remaining = self._register_failure(record)
+            remaining = self._attempts.register_failure(cpf)
             logger.info(
-                f"Invalid birthdate for CPF: {cpf[:3]}***, attempts remaining: {remaining}"
+                "Invalid birthdate for CPF: %s, attempts remaining: %s",
+                mask_cpf(cpf),
+                remaining,
             )
             raise AuthenticationError(remaining_attempts=remaining)
 
@@ -85,7 +73,7 @@ class TriageAgent:
 
         intent = await self._llm_service.classify_intent(request.user_message)
 
-        logger.info(f"Authentication successful for CPF: {cpf[:3]}***, intent: {intent}")
+        logger.info("Authentication successful for CPF: %s, intent: %s", mask_cpf(cpf), intent)
 
         return AuthResponse(
             authenticated=True,
@@ -95,4 +83,4 @@ class TriageAgent:
         )
 
     def reset_attempts(self, cpf: str) -> None:
-        self._attempts.pop(normalize_cpf(cpf), None)
+        self._attempts.reset(cpf)

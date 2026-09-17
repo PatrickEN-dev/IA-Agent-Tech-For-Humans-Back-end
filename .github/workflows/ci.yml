@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint e testes (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Verificar CPFs da base
+        # A base da demonstração não pode conter CPF que o próprio app rejeitaria.
+        run: python scripts/fix_client_cpfs.py --check
+
+      - name: Testes com cobertura
+        run: pytest --cov=src --cov-report=term-missing --cov-fail-under=80
+
+      - name: Smoke do seed em banco limpo
+        # Garante que um deploy novo sobe com o banco populado, e que rodar duas vezes
+        # não duplica nada.
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./data/ci_smoke.db
+        run: |
+          python scripts/seed.py --reset
+          python scripts/seed.py

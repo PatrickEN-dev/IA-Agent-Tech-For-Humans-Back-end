@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 # Brasil nao tem horario de verao desde 2019: offset fixo evita depender de tzdata no Windows.
 BRAZIL_TZ = timezone(timedelta(hours=-3), name="BRT")
@@ -22,5 +22,5 @@ def format_rate(rate: float) -> str:
 def format_datetime_brt(moment: datetime) -> str:
     """Data e hora no horario de Brasilia: 17/09/2026 12:12."""
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
     return moment.astimezone(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M")

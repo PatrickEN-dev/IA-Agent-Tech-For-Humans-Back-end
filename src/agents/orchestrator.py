@@ -4,12 +4,13 @@ import time
 import uuid
 from datetime import date
 from enum import Enum
-from typing import Optional
 
 from src.agents.cambio import ExchangeAgent
 from src.agents.credito import CreditAgent
 from src.agents.entrevista import InterviewAgent
 from src.config import get_settings
+from src.db.repositories import ClientRepository
+from src.models.domain import Client
 from src.models.schemas import (
     InterviewRequest,
     LimitIncreaseRequest,
@@ -17,9 +18,12 @@ from src.models.schemas import (
     UnifiedChatRequest,
     UnifiedChatResponse,
 )
+from src.services.auth_attempts import AuthAttemptTracker, auth_attempt_tracker
 from src.services.auth_service import AuthService
-from src.services.csv_service import CSVService
 from src.services.llm_service import BANKING_INTENTS, LLMService
+from src.services.signup_service import SignupError, SignupService
+from src.services.telemetry import telemetry
+from src.utils.cpf import format_cpf, is_valid_cpf, mask_cpf
 from src.utils.formatting import format_brl, format_datetime_brt
 from src.utils.text_normalizer import (
     contains_any,
@@ -131,6 +135,10 @@ class OrchestratorState(str, Enum):
     EXCHANGE_FLOW = "exchange_flow"
     EXCHANGE_FROM = "exchange_from"
     EXCHANGE_TO = "exchange_to"
+    SIGNUP_NAME = "signup_name"
+    SIGNUP_BIRTHDATE = "signup_birthdate"
+    SIGNUP_CPF = "signup_cpf"
+    SIGNUP_CEP = "signup_cep"
     GOODBYE = "goodbye"
 
 
@@ -154,27 +162,75 @@ CREDIT_STATES = {
     OrchestratorState.CREDIT_INCREASE_FLOW,
 }
 
+SIGNUP_STATES = {
+    OrchestratorState.SIGNUP_NAME,
+    OrchestratorState.SIGNUP_BIRTHDATE,
+    OrchestratorState.SIGNUP_CPF,
+    OrchestratorState.SIGNUP_CEP,
+}
+
+# Frases que abrem o auto-cadastro. Ficam separadas das intenções bancárias porque
+# valem antes da autenticação, que é justamente onde o visitante trava.
+SIGNUP_PHRASES = [
+    "criar conta",
+    "criar uma conta",
+    "abrir conta",
+    "abrir uma conta",
+    "quero criar conta",
+    "quero me cadastrar",
+    "me cadastrar",
+    "cadastrar",
+    "cadastro",
+    "nao tenho conta",
+    "nao tenho cadastro",
+    "nao sou cliente",
+    "sou novo",
+    "sou nova",
+    "novo cliente",
+    "criar perfil",
+    "quero testar",
+]
+
+# "gera um pra mim": o visitante não quer inventar um CPF válido na mão.
+GENERATE_CPF_PHRASES = [
+    "gera",
+    "gere",
+    "gerar",
+    "qualquer um",
+    "tanto faz",
+    "escolhe",
+    "escolha",
+    "voce escolhe",
+    "pode gerar",
+    "nao sei",
+    "nao tenho",
+    "pula",
+    "pular",
+]
+
+SKIP_PHRASES = ["pular", "pula", "nao quero", "prefiro nao", "deixa", "sem cep", "nao"]
+
 
 class OrchestratorSession:
     def __init__(self, max_history: int = 20):
         self.state = OrchestratorState.WELCOME
-        self.cpf: Optional[str] = None
-        self.birthdate: Optional[date] = None
-        self.token: Optional[str] = None
-        self.user_name: Optional[str] = None
+        self.cpf: str | None = None
+        self.birthdate: date | None = None
+        self.token: str | None = None
+        self.user_name: str | None = None
         self.current_agent: AgentType = AgentType.TRIAGE
         self.collected_data: dict = {}
-        self.pending_redirect: Optional[RedirectAction] = None
+        self.pending_redirect: RedirectAction | None = None
         # Intencao dita antes da autenticacao ("quero ver meu limite" -> pede CPF -> mostra limite)
-        self.pending_intent: Optional[str] = None
-        self.pending_intent_message: Optional[str] = None
+        self.pending_intent: str | None = None
+        self.pending_intent_message: str | None = None
         self.conversation_history: list[dict] = []
         self.auth_attempts = 0
         self.locked = False
         # Respostas seguidas nao compreendidas dentro do fluxo atual
         self.flow_misses = 0
         # Aviso a ser prefixado na proxima resposta (ex.: sessao expirada)
-        self.pending_notice: Optional[str] = None
+        self.pending_notice: str | None = None
         self.last_activity = time.monotonic()
         self._max_history = max_history
 
@@ -196,7 +252,7 @@ class OrchestratorSession:
         return self.state in CREDIT_STATES | INTERVIEW_STATES | EXCHANGE_STATES
 
     @property
-    def first_name(self) -> Optional[str]:
+    def first_name(self) -> str | None:
         return self.user_name.split()[0] if self.user_name else None
 
 
@@ -213,21 +269,25 @@ class Orchestrator:
         credit_agent: CreditAgent | None = None,
         interview_agent: InterviewAgent | None = None,
         exchange_agent: ExchangeAgent | None = None,
-        csv_service: CSVService | None = None,
+        client_repository: ClientRepository | None = None,
         auth_service: AuthService | None = None,
         llm_service: LLMService | None = None,
+        attempt_tracker: AuthAttemptTracker | None = None,
+        signup_service: SignupService | None = None,
     ):
         self._settings = get_settings()
         self._sessions: dict[str, OrchestratorSession] = {}
         self._last_cleanup = time.monotonic()
 
-        self._csv_service = csv_service or CSVService()
+        self._clients = client_repository or ClientRepository()
         self._auth_service = auth_service or AuthService()
         self._llm_service = llm_service or LLMService()
         self._parser = self._llm_service.parser
 
-        self._credit_agent = credit_agent or CreditAgent(self._csv_service)
-        self._interview_agent = interview_agent or InterviewAgent(self._csv_service)
+        self._attempts = attempt_tracker or auth_attempt_tracker
+        self._signup_service = signup_service or SignupService(self._clients)
+        self._credit_agent = credit_agent or CreditAgent(self._clients)
+        self._interview_agent = interview_agent or InterviewAgent(self._clients)
         self._exchange_agent = exchange_agent or ExchangeAgent()
 
     def warmup(self) -> None:
@@ -242,7 +302,7 @@ class Orchestrator:
             self._sessions[session_id] = session
         return session
 
-    def _resolve_session(self, requested_id: Optional[str]) -> tuple[str, OrchestratorSession]:
+    def _resolve_session(self, requested_id: str | None) -> tuple[str, OrchestratorSession]:
         """Recupera a sessao pedida ou cria uma nova.
 
         Se o cliente mandou um id que nao conhecemos mais (TTL expirado ou reinicio
@@ -295,6 +355,26 @@ class Orchestrator:
         return self._build_response(session_id, session, welcome_message)
 
     async def process_message(self, request: UnifiedChatRequest) -> UnifiedChatResponse:
+        """Um turno de conversa, com o custo do turno medido.
+
+        O envelope de telemetria fica aqui e não em cada handler: é o único ponto por
+        onde todo turno passa, então a medição não pode divergir entre caminhos.
+        """
+        started = time.perf_counter()
+        llm_calls_before = self._llm_service.llm_calls
+        llm_ms_before = self._llm_service.llm_ms
+        try:
+            response = await self._process_message(request)
+        finally:
+            llm_calls = self._llm_service.llm_calls - llm_calls_before
+            telemetry.record_turn(
+                used_llm=llm_calls > 0,
+                turn_ms=(time.perf_counter() - started) * 1000,
+                llm_ms=self._llm_service.llm_ms - llm_ms_before,
+            )
+        return response
+
+    async def _process_message(self, request: UnifiedChatRequest) -> UnifiedChatResponse:
         self._cleanup_expired_sessions()
 
         session_id, session = self._resolve_session(request.session_id)
@@ -348,6 +428,16 @@ class Orchestrator:
     async def _route(
         self, session_id: str, session: OrchestratorSession, message: str
     ) -> UnifiedChatResponse:
+        # "criar conta" vale antes da autenticação: é exatamente onde o visitante que
+        # não tem CPF nesta base fica sem saída.
+        if (
+            session.state
+            in (OrchestratorState.COLLECTING_CPF, OrchestratorState.COLLECTING_BIRTHDATE)
+            and self._signup_available()
+            and self._wants_signup(message)
+        ):
+            return self._start_signup(session_id, session)
+
         if session.state == OrchestratorState.COLLECTING_CPF:
             return await self._handle_cpf_collection(session_id, session, message)
 
@@ -365,6 +455,9 @@ class Orchestrator:
 
         if session.state in EXCHANGE_STATES:
             return await self._handle_exchange_flow(session_id, session, message)
+
+        if session.state in SIGNUP_STATES:
+            return await self._handle_signup_flow(session_id, session, message)
 
         session.reset_flow()
         return self._build_response(
@@ -397,7 +490,7 @@ class Orchestrator:
 
     # ---------------------------------------------------------------- auth flow
 
-    async def _classify_pre_auth(self, message: str) -> Optional[str]:
+    async def _classify_pre_auth(self, message: str) -> str | None:
         """Antes da autenticacao: regras sempre; LLM apenas se nao houver digitos."""
         intent = self._llm_service.classify_with_rules(message)
         if intent is None and not has_digits(message):
@@ -411,23 +504,59 @@ class Orchestrator:
             return False
         return today.year - birthdate.year <= MAX_CUSTOMER_AGE_YEARS
 
-    def _register_failed_attempt(self, session: OrchestratorSession) -> bool:
-        """Conta uma tentativa de autenticacao falha. Retorna True se a sessao travou."""
+    def _register_failed_attempt(
+        self, session: OrchestratorSession, cpf: str | None = None
+    ) -> bool:
+        """Conta uma tentativa falha. Retorna True se o atendimento travou.
+
+        A contagem é dupla de propósito: por sessão (para encerrar esta conversa) e,
+        quando há um CPF na jogada, por CPF no tracker compartilhado — assim abrir uma
+        aba nova não zera o contador de quem está chutando CPF alheio.
+        """
         session.auth_attempts += 1
-        if session.auth_attempts >= self._settings.max_auth_attempts:
+
+        if cpf:
+            self._attempts.register_failure(cpf)
+
+        cpf_locked = bool(cpf) and self._attempts.is_locked(cpf)
+        session_locked = session.auth_attempts >= self._settings.max_auth_attempts
+
+        if session_locked or cpf_locked:
             session.locked = True
             session.state = OrchestratorState.GOODBYE
-            logger.warning("Session locked after too many failed authentication attempts")
+            logger.warning(
+                "Atendimento bloqueado (sessao=%s, cpf=%s)",
+                session_locked,
+                mask_cpf(cpf) if cpf else "-",
+            )
             return True
         return False
 
+    def _not_found_message(self) -> str:
+        base = "Não encontrei esse CPF na nossa base."
+        if self._settings.demo_mode and self._settings.signup_enabled:
+            return (
+                f"{base} Este é um ambiente de demonstração, então ele não teria mesmo os "
+                "seus dados reais. Você pode entrar como um cliente de demonstração ou "
+                'criar uma conta de teste agora — é só dizer "criar conta".'
+            )
+        return f"{base} Verifique os números e tente novamente."
+
     def _locked_response(self, session_id: str, session: OrchestratorSession) -> UnifiedChatResponse:
-        return self._build_response(
-            session_id,
-            session,
-            f"Por segurança, encerrei o atendimento após {self._settings.max_auth_attempts} "
-            "tentativas de autenticação sem sucesso. Se precisar, inicie uma nova conversa.",
+        message = (
+            f"Por segurança, encerrei este atendimento após "
+            f"{self._settings.max_auth_attempts} tentativas de autenticação sem sucesso."
         )
+        if self._settings.demo_mode:
+            # Bloqueio sem saída é um beco: o visitante fecha a aba e vai embora.
+            message += (
+                "\n\nComo este é um ambiente de demonstração, você pode continuar de duas "
+                "formas: entrar como um cliente de demonstração ou criar uma conta de teste. "
+                "Basta iniciar um novo atendimento."
+            )
+        else:
+            message += " Se precisar, inicie uma nova conversa."
+        return self._build_response(session_id, session, message)
 
     async def _handle_cpf_collection(
         self, session_id: str, session: OrchestratorSession, message: str
@@ -481,14 +610,29 @@ class Orchestrator:
                 user_message=message,
             )
 
-        client = await self._csv_service.get_client_by_cpf(cpf)
-        if not client:
-            if self._register_failed_attempt(session):
+        # Dígitos verificadores antes de consultar a base: "não é um CPF" é uma
+        # informação diferente de "não encontrei", e não custa uma ida ao banco.
+        if not is_valid_cpf(cpf):
+            if self._register_failed_attempt(session, cpf=cpf):
                 return self._locked_response(session_id, session)
             return await self._build_humanized_response(
                 session_id,
                 session,
-                technical_message="CPF não encontrado em nossa base. Verifique e tente novamente.",
+                technical_message=(
+                    "Esse número não é um CPF válido — os dígitos verificadores não batem. "
+                    "Pode conferir e enviar de novo?"
+                ),
+                user_message=message,
+            )
+
+        client = await self._clients.get_by_cpf(cpf)
+        if not client:
+            if self._register_failed_attempt(session, cpf=cpf):
+                return self._locked_response(session_id, session)
+            return await self._build_humanized_response(
+                session_id,
+                session,
+                technical_message=self._not_found_message(),
                 user_message=message,
             )
 
@@ -570,9 +714,11 @@ class Orchestrator:
                 "válida. Confere o ano e me envia de novo no formato DD/MM/AAAA?",
             )
 
-        client = await self._csv_service.get_client_by_cpf(session.cpf)
+        client = await self._clients.get_by_cpf(session.cpf)
         if client is None or date.fromisoformat(client.data_nascimento) != birthdate:
-            if self._register_failed_attempt(session):
+            # Aqui o CPF existe e está sendo testado contra datas: é exatamente o caso
+            # que a contagem por CPF precisa pegar, mesmo que troquem de sessão.
+            if self._register_failed_attempt(session, cpf=session.cpf):
                 return self._locked_response(session_id, session)
             return await self._build_humanized_response(
                 session_id,
@@ -581,29 +727,270 @@ class Orchestrator:
                 user_message=message,
             )
 
+        return await self._complete_authentication(
+            session_id, session, client, birthdate, user_message=message
+        )
+
+    async def _complete_authentication(
+        self,
+        session_id: str,
+        session: OrchestratorSession,
+        client: Client,
+        birthdate: date,
+        *,
+        user_message: str | None = None,
+        greeting: str | None = None,
+    ) -> UnifiedChatResponse:
+        """Fecha a autenticação e entrega o menu (ou a intenção que ficou pendente).
+
+        Extraído porque três caminhos chegam aqui — o chat, o login por persona e o
+        auto-cadastro — e duplicar emissão de token e transição de estado entre eles é
+        como uma sessão acaba autenticada pela metade.
+        """
+        session.cpf = client.cpf
+        session.user_name = client.nome
         session.birthdate = birthdate
-        session.token = self._auth_service.create_token(session.cpf)
+        self._attempts.reset(client.cpf)
+        session.token = self._auth_service.create_token(client.cpf)
         session.state = OrchestratorState.AUTHENTICATED
         session.current_agent = AgentType.TRIAGE
         session.auth_attempts = 0
+        session.locked = False
 
-        greeting = f"Autenticado com sucesso! Olá, {client.nome}!"
+        greeting = greeting or f"Autenticado com sucesso! Olá, {client.nome}!"
 
         if session.pending_intent:
             intent = session.pending_intent
-            original_message = session.pending_intent_message or message
+            original_message = session.pending_intent_message or user_message or ""
             session.pending_intent = None
             session.pending_intent_message = None
             return await self._dispatch_intent(
                 session_id, session, intent, original_message, prefix=greeting
             )
 
+        technical_message = f"{greeting}\n\nComo posso ajudar?\n{MENU_TEXT}"
+
+        if user_message is None:
+            # Login por persona ou cadastro: não há frase do usuário para humanizar,
+            # e chamar o LLM sem contexto só gastaria token.
+            return self._build_response(
+                session_id, session, technical_message, authenticated=True
+            )
+
         return await self._build_humanized_response(
             session_id,
             session,
-            technical_message=f"{greeting}\n\nComo posso ajudar?\n{MENU_TEXT}",
-            user_message=message,
+            technical_message=technical_message,
+            user_message=user_message,
             authenticated=True,
+        )
+
+    async def login_as_client(
+        self, session_id: str | None, client: Client, *, greeting: str | None = None
+    ) -> UnifiedChatResponse:
+        """Autentica direto a partir de um cliente já conhecido (persona ou recém-criado).
+
+        Não é um atalho que burla a autenticação: quem chama já provou conhecer o
+        cliente — a persona é pública por definição e o cadastro acabou de criá-lo.
+        """
+        resolved_id, session = self._resolve_session(session_id)
+        session.pending_notice = None
+        session.touch()
+        birthdate = date.fromisoformat(client.data_nascimento)
+        return await self._complete_authentication(
+            resolved_id, session, client, birthdate, greeting=greeting
+        )
+
+    def get_snapshot(self, session_id: str) -> dict | None:
+        """Estado atual da conversa, para o front retomar após um reload."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+        return {
+            "session_id": session_id,
+            "state": session.state.value,
+            "authenticated": bool(session.token),
+            "user_name": session.first_name,
+            "current_agent": session.current_agent.value,
+            "available_actions": self._get_available_actions(session),
+            "messages": list(session.conversation_history),
+        }
+
+    # ---------------------------------------------------------------- signup
+
+    def _signup_available(self) -> bool:
+        return self._settings.demo_mode and self._settings.signup_enabled
+
+    @staticmethod
+    def _wants_signup(message: str) -> bool:
+        return contains_any(normalize_text(message), SIGNUP_PHRASES)
+
+    def _start_signup(
+        self, session_id: str, session: OrchestratorSession, prefix: str = ""
+    ) -> UnifiedChatResponse:
+        session.collected_data = {"signup": {}}
+        session.state = OrchestratorState.SIGNUP_NAME
+        session.flow_misses = 0
+        return self._build_response(
+            session_id,
+            session,
+            f"{prefix}Vamos abrir sua conta de demonstração — leva menos de um minuto.\n\n"
+            "Como você quer ser chamado? Me diga um nome e um sobrenome.\n"
+            "(Dados fictícios, por favor: este ambiente é só para testes.)",
+        )
+
+    def _cancel_signup(
+        self, session_id: str, session: OrchestratorSession
+    ) -> UnifiedChatResponse:
+        session.collected_data = {}
+        session.state = OrchestratorState.COLLECTING_CPF
+        return self._build_response(
+            session_id,
+            session,
+            "Sem problema, cancelei o cadastro. Se quiser entrar com uma conta existente, "
+            "me informe o CPF.",
+        )
+
+    async def _handle_signup_flow(
+        self, session_id: str, session: OrchestratorSession, message: str
+    ) -> UnifiedChatResponse:
+        if contains_any(normalize_text(message), CANCEL_PHRASES):
+            return self._cancel_signup(session_id, session)
+
+        data = session.collected_data.setdefault("signup", {})
+        state = session.state
+
+        if state == OrchestratorState.SIGNUP_NAME:
+            try:
+                data["nome"] = self._signup_service.validate_name(message)
+            except SignupError as exc:
+                return self._build_response(session_id, session, exc.message)
+            session.state = OrchestratorState.SIGNUP_BIRTHDATE
+            return self._build_response(
+                session_id,
+                session,
+                f"Prazer, {data['nome'].split()[0]}! Qual é a sua data de nascimento? "
+                "(DD/MM/AAAA)",
+            )
+
+        if state == OrchestratorState.SIGNUP_BIRTHDATE:
+            parts = parse_date_from_text(message)
+            if not parts:
+                return self._build_response(
+                    session_id,
+                    session,
+                    "Não consegui ler a data. Use o formato DD/MM/AAAA, por exemplo 15/05/1990.",
+                )
+            try:
+                day, month, year = parts
+                birthdate = date(year, month, day)
+            except ValueError:
+                return self._build_response(
+                    session_id,
+                    session,
+                    "Essa data não existe no calendário. Pode conferir e enviar de novo?",
+                )
+            data["data_nascimento"] = birthdate.isoformat()
+            session.state = OrchestratorState.SIGNUP_CPF
+            return self._build_response(
+                session_id,
+                session,
+                "Agora o CPF da conta de teste. Você pode digitar um CPF válido qualquer "
+                'ou dizer "gera um pra mim" que eu crio um número válido para você.',
+            )
+
+        if state == OrchestratorState.SIGNUP_CPF:
+            normalized = normalize_text(message)
+            cpf: str | None = extract_cpf_from_text(message)
+
+            if cpf is None:
+                if not contains_any(normalized, GENERATE_CPF_PHRASES):
+                    return self._build_response(
+                        session_id,
+                        session,
+                        "Não encontrei 11 dígitos aí. Envie o CPF ou diga "
+                        '"gera um pra mim".',
+                    )
+                try:
+                    cpf = await self._signup_service.suggest_cpf()
+                except SignupError as exc:
+                    return self._build_response(session_id, session, exc.message)
+
+            if not is_valid_cpf(cpf):
+                return self._build_response(
+                    session_id,
+                    session,
+                    "Esse número não passa na validação de dígitos verificadores. Envie "
+                    'outro ou diga "gera um pra mim".',
+                )
+
+            data["cpf"] = cpf
+            session.state = OrchestratorState.SIGNUP_CEP
+            return self._build_response(
+                session_id,
+                session,
+                f"Anotado: {format_cpf(cpf)}.\n\n"
+                "Por último, qual o seu CEP? Uso só para preencher cidade e estado — "
+                'pode dizer "pular" se preferir.',
+            )
+
+        if state == OrchestratorState.SIGNUP_CEP:
+            normalized = normalize_text(message)
+            cep = None if contains_any(normalized, SKIP_PHRASES) else message
+            return await self._finish_signup(session_id, session, data, cep)
+
+        session.state = OrchestratorState.SIGNUP_NAME
+        return self._build_response(
+            session_id, session, "Vamos recomeçar o cadastro. Qual é o seu nome completo?"
+        )
+
+    async def _finish_signup(
+        self,
+        session_id: str,
+        session: OrchestratorSession,
+        data: dict,
+        cep: str | None,
+    ) -> UnifiedChatResponse:
+        try:
+            result = await self._signup_service.register(
+                nome=data["nome"],
+                cpf=data.get("cpf"),
+                data_nascimento=date.fromisoformat(data["data_nascimento"]),
+                cep=cep,
+            )
+        except SignupError as exc:
+            if exc.code == "cpf_taken":
+                # Já existe: o caminho útil é entrar, não cadastrar de novo.
+                session.collected_data = {}
+                session.state = OrchestratorState.COLLECTING_CPF
+                return self._build_response(session_id, session, exc.message)
+            session.state = OrchestratorState.SIGNUP_NAME
+            session.collected_data = {"signup": {}}
+            return self._build_response(
+                session_id,
+                session,
+                f"{exc.message}\n\nVamos tentar de novo: qual é o seu nome completo?",
+            )
+
+        client = result.client
+        session.collected_data = {}
+
+        local = f" em {result.address_label}" if result.address_label else ""
+        greeting = (
+            f"Conta criada, {client.first_name}!{local and ' Bem-vindo' + local + '.'}\n\n"
+            f"CPF: {format_cpf(client.cpf)}\n"
+            f"Nascimento: {date.fromisoformat(client.data_nascimento).strftime('%d/%m/%Y')}\n"
+            f"Score inicial: {client.score}\n"
+            f"Limite: {format_brl(client.limite_atual)}\n\n"
+            "Guarde o CPF e a data: é com eles que você entra de novo."
+        )
+
+        return await self._complete_authentication(
+            session_id,
+            session,
+            client,
+            date.fromisoformat(client.data_nascimento),
+            greeting=greeting,
         )
 
     # ------------------------------------------------------------ authenticated
@@ -674,7 +1061,7 @@ class Orchestrator:
         self,
         session_id: str,
         session: OrchestratorSession,
-        intent: Optional[str],
+        intent: str | None,
         message: str,
         prefix: str = "",
     ) -> UnifiedChatResponse:
@@ -720,6 +1107,20 @@ class Orchestrator:
 
     # ---------------------------------------------------------------- credit
 
+    @staticmethod
+    def _increase_hint(result) -> str:  # type: ignore[no-untyped-def]
+        """Só oferece aumento quando o score realmente sustenta um valor maior.
+
+        Oferecer "quer aumentar?" para quem já está no teto é a forma mais rápida de
+        levar o cliente a um "não" logo em seguida.
+        """
+        if result.current_limit < result.max_limit_for_score:
+            return "Deseja solicitar aumento de limite?"
+        return (
+            "Seu limite já está no teto do seu score. Se quiser subir além disso, posso "
+            "atualizar seu perfil financeiro e reavaliar o score. Vamos?"
+        )
+
     async def _show_limit(
         self, session_id: str, session: OrchestratorSession, prefix: str = ""
     ) -> UnifiedChatResponse:
@@ -729,9 +1130,9 @@ class Orchestrator:
         response_message = (
             f"{prefix}"
             f"Seu limite atual: {format_brl(result.current_limit)}\n"
-            f"Disponível: {format_brl(result.available_limit)}\n"
-            f"Score: {result.score}\n\n"
-            "Deseja solicitar aumento de limite?"
+            f"Score: {result.score}\n"
+            f"Teto para esse score: {format_brl(result.max_limit_for_score)}\n\n"
+            + self._increase_hint(result)
         )
 
         redirect = RedirectAction(
@@ -772,7 +1173,7 @@ class Orchestrator:
         result = await self._credit_agent.request_increase(session.cpf, request)
 
         response_message = f"{prefix}{result.message}"
-        redirect: Optional[RedirectAction] = None
+        redirect: RedirectAction | None = None
 
         if result.offer_interview:
             redirect = RedirectAction(
@@ -1052,7 +1453,7 @@ class Orchestrator:
             )
         return "Seu score se manteve o mesmo."
 
-    def _flow_intent(self, state: OrchestratorState) -> Optional[str]:
+    def _flow_intent(self, state: OrchestratorState) -> str | None:
         if state in CREDIT_STATES:
             return "request_increase"
         if state in INTERVIEW_STATES:
@@ -1067,7 +1468,7 @@ class Orchestrator:
         session: OrchestratorSession,
         message: str,
         flow_label: str,
-    ) -> Optional[UnifiedChatResponse]:
+    ) -> UnifiedChatResponse | None:
         """Permite sair de um fluxo de coleta sem ficar preso em "não entendi o valor".
 
         Cancelamento explicito ("cancelar", "voltar"), despedida ou uma intencao bancaria
@@ -1115,7 +1516,6 @@ class Orchestrator:
                 session_id,
                 session,
                 f"Seu novo limite: {format_brl(result.current_limit)}\n"
-                f"Disponível: {format_brl(result.available_limit)}\n"
                 f"Score: {result.score}\n\n"
                 "Posso ajudar com mais alguma coisa?",
                 authenticated=True,
@@ -1168,7 +1568,7 @@ class Orchestrator:
         session: OrchestratorSession,
         message: str,
         authenticated: bool = False,
-        redirect: Optional[RedirectAction] = None,
+        redirect: RedirectAction | None = None,
     ) -> UnifiedChatResponse:
         if session.pending_notice:
             message = f"{session.pending_notice}\n\n{message}"
@@ -1194,7 +1594,7 @@ class Orchestrator:
         technical_message: str,
         user_message: str,
         authenticated: bool = False,
-        redirect: Optional[RedirectAction] = None,
+        redirect: RedirectAction | None = None,
     ) -> UnifiedChatResponse:
         humanized_message = await self._llm_service.humanize_response(
             user_message=user_message,

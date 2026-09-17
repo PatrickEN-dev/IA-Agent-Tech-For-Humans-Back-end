@@ -21,7 +21,7 @@ async def test_unified_cpf_collection_valid(client: AsyncClient) -> None:
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -50,11 +50,13 @@ async def test_unified_cpf_not_found(client: AsyncClient) -> None:
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "99999999999"},
+        # CPF valido nos digitos verificadores, mas ausente da base: e este o caso
+        # que deve dizer "nao encontrei", e nao "nao e um CPF".
+        json={"session_id": session_id, "message": "52998224725"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert "não encontrado" in data["message"].lower()
+    assert "não encontrei" in data["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -64,7 +66,7 @@ async def test_unified_full_authentication_flow(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
 
     response = await client.post(
@@ -85,7 +87,7 @@ async def test_unified_birthdate_invalid(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
 
     response = await client.post(
@@ -104,7 +106,7 @@ async def test_unified_credit_limit_query(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -127,7 +129,7 @@ async def test_unified_credit_increase_flow(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -150,7 +152,7 @@ async def test_unified_credit_increase_with_value(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -179,7 +181,7 @@ async def test_unified_credit_denied_offers_interview(client: AsyncClient) -> No
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -209,7 +211,7 @@ async def test_unified_interview_full_flow(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -257,7 +259,7 @@ async def test_unified_exchange_flow(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -280,7 +282,7 @@ async def test_unified_exchange_direct_when_currency_given(client: AsyncClient) 
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -304,7 +306,7 @@ async def test_unified_exchange_complete(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -349,7 +351,7 @@ async def test_unified_cpf_formatted(client: AsyncClient) -> None:
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "123.456.789-01"},
+        json={"session_id": session_id, "message": "123.456.789-09"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -363,7 +365,7 @@ async def test_unified_date_alternative_format(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
 
     response = await client.post(
@@ -382,7 +384,7 @@ async def test_unified_available_actions(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -410,7 +412,7 @@ async def test_unified_multiple_sessions(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id1, "message": "12345678901"},
+        json={"session_id": session_id1, "message": "12345678909"},
     )
 
     response2 = await client.post(
@@ -427,7 +429,7 @@ async def test_unified_redirect_acceptance(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -458,7 +460,7 @@ async def test_unified_redirect_rejection(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -489,7 +491,7 @@ async def test_unified_interview_with_natural_language(client: AsyncClient) -> N
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -536,7 +538,7 @@ async def test_unified_interview_mei_employment(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -567,7 +569,7 @@ async def test_unified_interview_publico_employment(client: AsyncClient) -> None
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",
@@ -598,7 +600,7 @@ async def test_unified_currency_jpy(client: AsyncClient) -> None:
 
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "12345678901"},
+        json={"session_id": session_id, "message": "12345678909"},
     )
     await client.post(
         "/unified/chat",

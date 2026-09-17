@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Banco SQLite gerado em runtime (o seed o recria a partir dos CSVs)
+data/
+*.db
+*.db-journal
+
+# Locks do filelock, remanescentes da era dos CSVs
+*.lock

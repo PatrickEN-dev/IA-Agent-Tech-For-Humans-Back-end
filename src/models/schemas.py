@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 # Teto absoluto do payload; o limite "amigavel" (max_message_length) e tratado no orquestrador
 # com uma resposta de chat, nao com erro 422.
@@ -23,8 +23,11 @@ class AuthResponse(BaseModel):
 
 class CreditLimitResponse(BaseModel):
     cpf: str
+    # Limite efetivamente concedido ao cliente, persistido.
     current_limit: float
-    available_limit: float
+    # Teto que o score sustenta hoje. Nao existe "disponivel": o MVP nao tem extrato
+    # de compras, entao inventar um percentual seria mentir para o cliente.
+    max_limit_for_score: float
     score: int
 
 
@@ -36,6 +39,9 @@ class LimitIncreaseResponse(BaseModel):
     cpf: str
     requested_limit: float
     status: Literal["approved", "pending_analysis", "denied"]
+    # Limite depois da decisao: muda quando o pedido e aprovado.
+    current_limit: float
+    max_limit_for_score: float
     message: str
     offer_interview: bool = False
     interview_message: str | None = None
@@ -53,6 +59,10 @@ class InterviewResponse(BaseModel):
     cpf: str
     previous_score: int
     new_score: int
+    # Score que a entrevista sozinha produziu, antes de ser combinado com o historico.
+    interview_score: int
+    score_factors: dict[str, float]
+    current_limit: float
     recommendation: str
     redirect_to: str
 
@@ -90,7 +100,96 @@ class UnifiedChatResponse(BaseModel):
     redirect_suggestion: RedirectAction | None = None
 
 
+class DemoPersona(BaseModel):
+    """Cliente de demonstração pronto, para entrar em um clique."""
+
+    id: str
+    nome: str
+    primeiro_nome: str
+    cpf: str
+    cpf_formatado: str
+    data_nascimento: str
+    score: int
+    limite_atual: float
+    max_limit_for_score: float
+    # Uma linha explicando o que esse perfil demonstra ("score alto, pedidos aprovados").
+    perfil: str
+
+
+class DemoPersonasResponse(BaseModel):
+    demo_mode: bool
+    signup_enabled: bool
+    aviso: str
+    personas: list[DemoPersona]
+
+
+class DemoLoginRequest(BaseModel):
+    session_id: str | None = Field(default=None, max_length=64)
+    persona_id: str = Field(..., min_length=1, max_length=32)
+
+
+class SignupRequest(BaseModel):
+    nome: str = Field(..., min_length=3, max_length=120)
+    # Vazio significa "gere um CPF válido para mim".
+    cpf: str | None = Field(default=None, max_length=14)
+    data_nascimento: date
+    email: EmailStr | None = None
+    cep: str | None = Field(default=None, max_length=9)
+    session_id: str | None = Field(default=None, max_length=64)
+
+
+class SignupResponse(BaseModel):
+    cpf: str
+    cpf_formatado: str
+    nome: str
+    data_nascimento: str
+    score: int
+    current_limit: float
+    max_limit_for_score: float
+    cidade: str | None = None
+    uf: str | None = None
+    endereco: str | None = None
+    # Qual provedor confirmou o CPF e se houve consulta externa de verdade.
+    cpf_provider: str
+    cpf_verified_externally: bool
+    message: str
+
+
+class SuggestedCpfResponse(BaseModel):
+    cpf: str
+    cpf_formatado: str
+    aviso: str
+
+
+class AddressResponse(BaseModel):
+    cep: str
+    logradouro: str | None = None
+    bairro: str | None = None
+    cidade: str
+    uf: str
+
+
+class SessionSnapshotResponse(BaseModel):
+    """Estado da conversa para o front retomar depois de um reload."""
+
+    session_id: str
+    state: str
+    authenticated: bool
+    user_name: str | None = None
+    current_agent: str
+    available_actions: list[str] = []
+    messages: list[dict] = []
+
+
 class HealthResponse(BaseModel):
     status: Literal["healthy"]
     version: str
     llm_enabled: bool
+    demo_mode: bool
+    signup_enabled: bool
+    cpf_provider: str
+    # Contadores de uso: quantos turnos passaram pelo modelo e quantos ficaram só nas
+    # regras. É esse número que sustenta a afirmação de custo no README.
+    turns_total: int = 0
+    llm_turns_total: int = 0
+    llm_turn_ratio: float = 0.0

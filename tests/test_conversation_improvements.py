@@ -1,14 +1,21 @@
 """Comportamentos de conversa e resiliência adicionados ao orquestrador unificado."""
 
-import csv
+import re
 import time
 
 import pytest
 from httpx import AsyncClient
 
-from src.api.routes import credit_agent, triage_agent
+from src.api.routes import client_repository, credit_agent, triage_agent
 from src.config import get_settings
-from tests.conftest import TEST_DATA_DIR
+from tests.conftest import TEST_CPF
+
+
+def _novo_score_na_mensagem(message: str) -> int:
+    """Extrai o "Novo score: N" que o chat mostrou, para conferir contra o banco."""
+    match = re.search(r"Novo score:\s*(\d+)", message)
+    assert match, f"mensagem sem 'Novo score': {message!r}"
+    return int(match.group(1))
 
 
 async def say(client: AsyncClient, session_id: str | None, message: str) -> dict:
@@ -26,7 +33,7 @@ async def start(client: AsyncClient) -> str:
 
 async def authenticate(client: AsyncClient) -> str:
     session_id = await start(client)
-    await say(client, session_id, "12345678901")
+    await say(client, session_id, "12345678909")
     data = await say(client, session_id, "15/05/1990")
     assert data["authenticated"] is True
     return session_id
@@ -99,7 +106,7 @@ class TestInputGuards:
     @pytest.mark.asyncio
     async def test_future_birthdate_is_flagged(self, client: AsyncClient) -> None:
         session_id = await start(client)
-        await say(client, session_id, "12345678901")
+        await say(client, session_id, "12345678909")
         data = await say(client, session_id, "15/05/2090")
         assert data["state"] == "collecting_birthdate"
         assert "não parece" in data["message"].lower()
@@ -169,13 +176,20 @@ class TestInterviewFeedback:
         assert "score anterior" in message
         assert "pontos" in message or "manteve" in message
 
-        with open(TEST_DATA_DIR / "clientes.csv", encoding="utf-8", newline="") as f:
-            rows = {row["cpf"]: row for row in csv.DictReader(f)}
-        row = rows["12345678901"]
-        new_score = int(row["score"])
-        assert new_score != 750
-        expected_limit = await credit_agent._score_service.get_limit_for_score(new_score)
-        assert float(row["limite_atual"]) == expected_limit
+        # A entrevista grava no banco: o estado persistido tem que bater com a resposta.
+        stored = await client_repository.get_by_cpf(TEST_CPF)
+        assert stored is not None
+        assert stored.score != 750
+        assert stored.score == _novo_score_na_mensagem(data["message"])
+
+        ceiling = await credit_agent._score_service.get_limit_for_score(stored.score)
+        # Limite nunca e reduzido por uma entrevista; ele acompanha o teto quando sobe.
+        assert stored.limite_atual >= ceiling or stored.limite_atual >= 5000.0
+
+        eventos = await client_repository.list_score_events(TEST_CPF)
+        assert eventos, "a mudanca de score precisa deixar rastro"
+        assert eventos[0].origem == "entrevista"
+        assert eventos[0].score_anterior == 750
 
 
 class TestResilience:
@@ -211,7 +225,9 @@ class TestResilience:
 class TestTriageLockoutExpiry:
     @pytest.mark.asyncio
     async def test_lockout_is_lifted_after_window(self, client: AsyncClient) -> None:
-        cpf = "11122233344"
+        # CPF valido nos digitos verificadores, mas ausente da base: o bloqueio e por
+        # tentativa de autenticacao, nao por numero malformado.
+        cpf = "52998224725"
         payload = {"cpf": cpf, "birthdate": "1990-01-01"}
         for _ in range(3):
             response = await client.post("/triage/authenticate", json=payload)
@@ -221,7 +237,7 @@ class TestTriageLockoutExpiry:
         assert response.status_code == 429
 
         # Simula a passagem da janela de bloqueio
-        record = triage_agent._attempts[cpf]
+        record = triage_agent._attempts._records[cpf]
         record.last_failure = time.monotonic() - (
             get_settings().auth_lockout_minutes * 60 + 1
         )

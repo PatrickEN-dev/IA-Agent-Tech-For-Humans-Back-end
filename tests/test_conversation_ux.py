@@ -19,7 +19,7 @@ async def start(client: AsyncClient) -> str:
 
 async def authenticate(client: AsyncClient) -> str:
     session_id = await start(client)
-    await say(client, session_id, "12345678901")
+    await say(client, session_id, "12345678909")
     data = await say(client, session_id, "15/05/1990")
     assert data["authenticated"] is True
     return session_id
@@ -34,7 +34,7 @@ class TestBeforeAuthentication:
         assert data["state"] == "collecting_cpf"
         assert "cpf" in data["message"].lower()
 
-        data = await say(client, session_id, "12345678901")
+        data = await say(client, session_id, "12345678909")
         assert data["state"] == "collecting_birthdate"
 
         data = await say(client, session_id, "15/05/1990")
@@ -44,7 +44,7 @@ class TestBeforeAuthentication:
 
     @pytest.mark.asyncio
     async def test_first_message_with_cpf_without_init(self, client: AsyncClient) -> None:
-        data = await say(client, None, "meu cpf é 123.456.789-01")
+        data = await say(client, None, "meu cpf é 123.456.789-09")
         assert data["state"] == "collecting_birthdate"
 
     @pytest.mark.asyncio
@@ -66,14 +66,14 @@ class TestBeforeAuthentication:
         assert data["state"] == "goodbye"
         assert "segurança" in data["message"].lower()
 
-        data = await say(client, session_id, "12345678901")
+        data = await say(client, session_id, "12345678909")
         assert data["state"] == "goodbye"
         assert data["authenticated"] is False
 
     @pytest.mark.asyncio
     async def test_wrong_birthdate_counts_toward_lockout(self, client: AsyncClient) -> None:
         session_id = await start(client)
-        await say(client, session_id, "12345678901")
+        await say(client, session_id, "12345678909")
 
         await say(client, session_id, "01/01/2000")
         await say(client, session_id, "02/02/2000")
@@ -128,15 +128,30 @@ class TestCreditIncrease:
     async def test_limit_uses_brazilian_currency_format(self, client: AsyncClient) -> None:
         session_id = await authenticate(client)
         data = await say(client, session_id, "meu limite")
+        assert "R$ 5.000,00" in data["message"]
         assert "R$ 15.000,00" in data["message"]
 
     @pytest.mark.asyncio
     async def test_value_below_current_limit_is_explained(self, client: AsyncClient) -> None:
+        """Pedir o que ja se tem nao e "aprovado": e explicar que ja esta disponivel."""
         session_id = await authenticate(client)
         await say(client, session_id, "quero aumento")
-        data = await say(client, session_id, "5 mil")
+        data = await say(client, session_id, "3 mil")
+        assert "já está disponível" in data["message"].lower()
+        assert "R$ 5.000,00" in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_value_within_ceiling_is_approved_and_persisted(
+        self, client: AsyncClient
+    ) -> None:
+        session_id = await authenticate(client)
+        await say(client, session_id, "quero aumento")
+        data = await say(client, session_id, "12 mil")
         assert "aprovado" in data["message"].lower()
-        assert "R$ 15.000,00" in data["message"]
+
+        # O limite mudou de verdade: a consulta seguinte precisa refletir isso.
+        data = await say(client, session_id, "meu limite")
+        assert "R$ 12.000,00" in data["message"]
 
 
 class TestFlowEscapes:

@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 
 def remove_accents(text: str) -> str:
@@ -43,7 +43,7 @@ def count_digits(text: str) -> int:
     return sum(1 for ch in text if ch.isdigit())
 
 
-def extract_cpf_from_text(text: str) -> Optional[str]:
+def extract_cpf_from_text(text: str) -> str | None:
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 11:
         return digits[:11]
@@ -115,7 +115,7 @@ AFFIRMATIVE_PHRASES = [
 ]
 
 
-def parse_boolean_response(text: str) -> Optional[bool]:
+def parse_boolean_response(text: str) -> bool | None:
     normalized = normalize_text(text)
     if not normalized:
         return None
@@ -134,7 +134,7 @@ def parse_boolean_response(text: str) -> Optional[bool]:
     return None
 
 
-def parse_date_from_text(text: str) -> Optional[tuple[int, int, int]]:
+def parse_date_from_text(text: str) -> tuple[int, int, int] | None:
     text = text.strip()
 
     months_map = {

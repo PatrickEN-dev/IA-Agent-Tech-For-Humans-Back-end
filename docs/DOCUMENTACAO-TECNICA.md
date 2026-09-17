@@ -304,7 +304,7 @@ score_final = clamp(soma_componentes, 0, 1000)
 **Response**:
 ```json
 {
-  "cpf": "12345678901",
+  "cpf": "12345678909",
   "current_limit": 15000.0,
   "available_limit": 12000.0,
   "score": 750
@@ -325,7 +325,7 @@ score_final = clamp(soma_componentes, 0, 1000)
 **Response (aprovado)**:
 ```json
 {
-  "cpf": "12345678901",
+  "cpf": "12345678909",
   "requested_limit": 20000.0,
   "status": "approved",
   "message": "Seu pedido de aumento foi aprovado!",
@@ -336,7 +336,7 @@ score_final = clamp(soma_componentes, 0, 1000)
 **Response (negado)**:
 ```json
 {
-  "cpf": "12345678901",
+  "cpf": "12345678909",
   "requested_limit": 50000.0,
   "status": "denied",
   "message": "Infelizmente nao podemos aprovar este valor.",

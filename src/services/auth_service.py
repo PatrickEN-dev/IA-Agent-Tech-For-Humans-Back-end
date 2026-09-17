@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -17,13 +17,13 @@ class AuthService:
         self._settings = settings or get_settings()
 
     def create_token(self, cpf: str) -> str:
-        expires = datetime.now(timezone.utc) + timedelta(
+        expires = datetime.now(UTC) + timedelta(
             minutes=self._settings.jwt_expiration_minutes
         )
         payload = {
             "sub": cpf,
             "exp": expires,
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
         }
         return jwt.encode(
             payload,
