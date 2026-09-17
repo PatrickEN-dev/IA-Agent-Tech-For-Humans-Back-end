@@ -7,82 +7,72 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+# Diretório de dados isolado para os testes. Precisa existir e estar no ambiente
+# ANTES de importar `src`, porque os agentes são singletons criados no import de
+# `src.api.routes` e leem `DATA_DIR` via `get_settings()` (lru_cache).
+TEST_DATA_DIR = Path(tempfile.mkdtemp(prefix="banco_agil_tests_"))
+
+CLIENTS_CSV = (
+    "cpf,nome,data_nascimento,score,limite_atual\n"
+    "12345678901,Maria Silva,1990-05-15,750,15000.00\n"
+    "98765432100,João Santos,1985-03-22,600,8000.00\n"
+)
+
+SCORE_LIMITS_CSV = (
+    "score_min,score_max,limite\n"
+    "0,299,500.00\n"
+    "300,399,1000.00\n"
+    "400,499,3000.00\n"
+    "500,599,5000.00\n"
+    "600,699,8000.00\n"
+    "700,799,15000.00\n"
+    "800,899,25000.00\n"
+    "900,1000,50000.00\n"
+)
+
+LIMIT_REQUESTS_CSV = (
+    "cpf_cliente,data_hora_solicitacao,limite_atual,novo_limite_solicitado,status_pedido\n"
+)
+
+
+def write_test_data() -> None:
+    (TEST_DATA_DIR / "clientes.csv").write_text(CLIENTS_CSV, encoding="utf-8")
+    (TEST_DATA_DIR / "score_limite.csv").write_text(SCORE_LIMITS_CSV, encoding="utf-8")
+    (TEST_DATA_DIR / "solicitacoes_aumento_limite.csv").write_text(
+        LIMIT_REQUESTS_CSV, encoding="utf-8"
+    )
+
+
+write_test_data()
+
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing"
 os.environ["USE_LANGCHAIN"] = "false"
+os.environ["DATA_DIR"] = str(TEST_DATA_DIR)
 
-from src.config import Settings, get_settings
-from src.main import app
-from src.services.auth_service import AuthService
+from src.config import Settings, get_settings  # noqa: E402
 
+get_settings.cache_clear()
 
-ORIGINAL_DATA_DIR = Path("src/data")
-BACKUP_CLIENTS = None
-
-
-def backup_csv():
-    global BACKUP_CLIENTS
-    clients_csv = ORIGINAL_DATA_DIR / "clientes.csv"
-    if clients_csv.exists():
-        BACKUP_CLIENTS = clients_csv.read_text()
-
-
-def restore_csv():
-    global BACKUP_CLIENTS
-    if BACKUP_CLIENTS:
-        clients_csv = ORIGINAL_DATA_DIR / "clientes.csv"
-        clients_csv.write_text(BACKUP_CLIENTS)
+from src.main import app  # noqa: E402
+from src.services.auth_service import AuthService  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
-def session_setup_teardown():
-    backup_csv()
+def _cleanup_test_data_dir():
     yield
-    restore_csv()
+    shutil.rmtree(TEST_DATA_DIR, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
-def reset_csv_after_test():
+def _reset_test_data():
+    """Entrevistas e solicitações gravam nos CSVs; restaura o estado a cada teste."""
     yield
-    restore_csv()
+    write_test_data()
 
 
 @pytest.fixture
-def temp_data_dir(tmp_path: Path) -> Path:
-    clients_csv = tmp_path / "clientes.csv"
-    clients_csv.write_text(
-        "cpf,nome,data_nascimento,score,limite_atual\n"
-        "12345678901,Maria Silva,1990-05-15,750,15000.00\n"
-        "98765432100,João Santos,1985-03-22,600,8000.00\n"
-    )
-
-    score_csv = tmp_path / "score_limite.csv"
-    score_csv.write_text(
-        "score_min,score_max,limite\n"
-        "0,299,500.00\n"
-        "300,399,1000.00\n"
-        "400,499,3000.00\n"
-        "500,599,5000.00\n"
-        "600,699,8000.00\n"
-        "700,799,15000.00\n"
-        "800,899,25000.00\n"
-        "900,1000,50000.00\n"
-    )
-
-    requests_csv = tmp_path / "solicitacoes_aumento_limite.csv"
-    requests_csv.write_text(
-        "cpf_cliente,data_hora_solicitacao,limite_atual,novo_limite_solicitado,status_pedido\n"
-    )
-
-    return tmp_path
-
-
-@pytest.fixture
-def test_settings(temp_data_dir: Path) -> Settings:
-    return Settings(
-        jwt_secret_key="test-secret-key-for-testing",
-        use_langchain=False,
-        data_dir=temp_data_dir,
-    )
+def test_settings() -> Settings:
+    return get_settings()
 
 
 @pytest.fixture
@@ -96,11 +86,7 @@ def valid_token(auth_service: AuthService) -> str:
 
 
 @pytest.fixture
-async def client(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> AsyncGenerator[AsyncClient, None]:
-    monkeypatch.setattr("src.config.get_settings", lambda: test_settings)
-
+async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test/api") as ac:
         yield ac

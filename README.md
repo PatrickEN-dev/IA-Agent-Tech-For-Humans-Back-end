@@ -26,6 +26,7 @@ streamlit run src/ui/streamlit_app_agent.py
 
 ## Endpoints
 
+- `POST /unified/init` / `POST /unified/chat` - Chat unificado (orquestrador)
 - `POST /triage/authenticate` - Autenticação
 - `GET /credit/limit` - Consulta limite
 - `POST /credit/request_increase` - Solicitação de aumento
@@ -34,11 +35,15 @@ streamlit run src/ui/streamlit_app_agent.py
 
 ## Dados de Teste
 
-| CPF         | Data Nascimento | Score |
-| ----------- | --------------- | ----- |
-| 12345678901 | 15/05/1990      | 750   |
-| 98765432100 | 22/03/1985      | 600   |
-| 11122233344 | 08/11/1992      | 850   |
+| CPF         | Nome                     | Data Nascimento | Score |
+| ----------- | ------------------------ | --------------- | ----- |
+| 52998224725 | Maria Helena Santos      | 15/05/1990      | 315   |
+| 71893456209 | João Pedro Oliveira      | 22/03/1985      | 620   |
+| 89156734502 | Ana Carolina Lima        | 08/11/1992      | 609   |
+| 34567891234 | Carlos Eduardo Souza     | 30/07/1978      | 450   |
+| 89123456789 | Patricia Souza Nascimento| 14/06/1976      | 920   |
+
+Lista completa em `src/data/clientes.csv`. Os testes automatizados usam uma base propria e isolada (veja `tests/conftest.py`).
 
 - Python 3.11+
 - pip (gerenciador de pacotes)
@@ -100,18 +105,20 @@ docker run -p 8000:8000 agente-bancario
 
 ### Clientes de Teste
 
-| CPF         | Nome         | Data Nascimento | Score |
-| ----------- | ------------ | --------------- | ----- |
-| 12345678901 | Maria Silva  | 15/05/1990      | 750   |
-| 98765432100 | Joao Santos  | 22/03/1985      | 600   |
-| 11122233344 | Ana Oliveira | 08/11/1992      | 850   |
-| 55566677788 | Carlos Souza | 30/07/1978      | 450   |
-| 99988877766 | Beatriz Lima | 12/01/1995      | 300   |
+| CPF         | Nome                     | Data Nascimento | Score |
+| ----------- | ------------------------ | --------------- | ----- |
+| 52998224725 | Maria Helena Santos      | 15/05/1990      | 315   |
+| 71893456209 | João Pedro Oliveira      | 22/03/1985      | 620   |
+| 89156734502 | Ana Carolina Lima        | 08/11/1992      | 609   |
+| 34567891234 | Carlos Eduardo Souza     | 30/07/1978      | 450   |
+| 89123456789 | Patricia Souza Nascimento| 14/06/1976      | 920   |
+
+Lista completa em `src/data/clientes.csv`. Os testes automatizados usam uma base propria e isolada (veja `tests/conftest.py`).
 
 ### Exemplo de Uso na Interface
 
 1. Acesse http://localhost:8501
-2. Digite o CPF: `12345678901`
+2. Digite o CPF: `52998224725`
 3. Digite a data de nascimento: `15/05/1990`
 4. Apos autenticacao, escolha uma opcao:
    - `1` - Consultar limite de credito

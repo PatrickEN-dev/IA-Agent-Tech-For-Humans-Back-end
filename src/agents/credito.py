@@ -8,6 +8,7 @@ from src.models.schemas import (
 )
 from src.services.csv_service import CSVService
 from src.services.score_service import ScoreService
+from src.utils.formatting import format_brl
 from src.utils.exceptions import ClientNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class CreditAgent:
 
         logger.info(f"Limit increase request for CPF: {cpf[:3]}***, status: {status}")
 
-        message = self._get_status_message(status, request.new_limit)
+        message = self._get_status_message(status, request.new_limit, current_limit)
 
         offer_interview = status == "denied"
         interview_message = None
@@ -82,10 +83,20 @@ class CreditAgent:
             interview_message=interview_message,
         )
 
-    def _get_status_message(self, status: str, requested_limit: float) -> str:
+    def _get_status_message(
+        self, status: str, requested_limit: float, current_limit: float
+    ) -> str:
+        if status == "approved" and requested_limit <= current_limit:
+            return (
+                f"Boa notícia: o valor de {format_brl(requested_limit)} já está aprovado, "
+                f"pois seu limite atual é de {format_brl(current_limit)}."
+            )
         messages = {
-            "approved": f"Sua solicitação de limite de R$ {requested_limit:,.2f} foi aprovada!",
+            "approved": f"Sua solicitação de limite de {format_brl(requested_limit)} foi aprovada!",
             "pending_analysis": "Sua solicitação está em análise. Entraremos em contato em breve.",
-            "denied": "Infelizmente, sua solicitação não pôde ser aprovada no momento.",
+            "denied": (
+                f"Infelizmente, sua solicitação de {format_brl(requested_limit)} não pôde ser "
+                f"aprovada no momento. Seu limite máximo com o score atual é {format_brl(current_limit)}."
+            ),
         }
         return messages.get(status, "Solicitação processada.")

@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
-from src.api.routes import router
+from src.api.routes import orchestrator, router
 from src.config import get_settings
 from src.utils.logging_config import setup_logging
 
@@ -12,6 +12,7 @@ from src.utils.logging_config import setup_logging
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     setup_logging(settings.log_level)
+    orchestrator.warmup()
     yield
 
 

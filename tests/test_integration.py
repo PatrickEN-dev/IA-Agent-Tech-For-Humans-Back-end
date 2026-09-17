@@ -354,9 +354,9 @@ async def run_integration_tests():
         response = await orchestrator.process_message(
             UnifiedChatRequest(session_id=session_id, message="cotação do dólar")
         )
-        return response.state == "exchange_from"
+        return "USD" in response.message and "BRL" in response.message
 
-    await test("17. Início de câmbio", test_exchange_start)
+    await test("17. Câmbio direto quando a moeda já foi informada", test_exchange_start)
 
     async def test_exchange_complete():
         response = await orchestrator.init_session()
@@ -368,15 +368,14 @@ async def run_integration_tests():
         await orchestrator.process_message(
             UnifiedChatRequest(session_id=session_id, message="15/05/1990")
         )
-        await orchestrator.process_message(
+        response = await orchestrator.process_message(
             UnifiedChatRequest(session_id=session_id, message="câmbio")
         )
-        await orchestrator.process_message(
-            UnifiedChatRequest(session_id=session_id, message="USD")
-        )
+        if response.state != "exchange_from":
+            return False
 
         response = await orchestrator.process_message(
-            UnifiedChatRequest(session_id=session_id, message="BRL")
+            UnifiedChatRequest(session_id=session_id, message="USD")
         )
         return "USD" in response.message and "BRL" in response.message
 

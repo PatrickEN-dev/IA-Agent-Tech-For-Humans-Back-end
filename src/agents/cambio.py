@@ -34,6 +34,15 @@ class ExchangeAgent:
         self._settings = get_settings()
         self._rate_cache: dict[str, tuple[float, datetime]] = {}
         self._cache_ttl_seconds = 300
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        # Cliente compartilhado: reaproveita conexoes TLS entre chamadas.
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self._settings.exchange_api_timeout_seconds)
+            )
+        return self._client
 
     async def get_rate(
         self, from_currency: str, to_currency: str
@@ -53,6 +62,9 @@ class ExchangeAgent:
     async def _fetch_rate(
         self, from_currency: str, to_currency: str
     ) -> tuple[float, datetime, str]:
+        if from_currency == to_currency:
+            return 1.0, datetime.now(timezone.utc), "live"
+
         cache_key = f"{from_currency}_{to_currency}"
         cached = self._rate_cache.get(cache_key)
         if cached:
@@ -62,23 +74,22 @@ class ExchangeAgent:
             ).total_seconds() < self._cache_ttl_seconds:
                 return rate, cached_time, "cached"
 
+        client = self._get_client()
         for api_url in FALLBACK_APIS:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    url = f"{api_url}/{from_currency}"
-                    response = await client.get(url)
-                    response.raise_for_status()
-                    data = response.json()
+                response = await client.get(f"{api_url}/{from_currency}")
+                response.raise_for_status()
+                data = response.json()
 
-                    rates_key = "rates"
-                    if rates_key in data and to_currency in data[rates_key]:
-                        rate = data[rates_key][to_currency]
-                        now = datetime.now(timezone.utc)
-                        self._rate_cache[cache_key] = (rate, now)
-                        logger.info(
-                            f"Exchange rate fetched: {from_currency}/{to_currency} = {rate}"
-                        )
-                        return rate, now, "live"
+                rates = data.get("rates") or {}
+                if to_currency in rates:
+                    rate = float(rates[to_currency])
+                    now = datetime.now(timezone.utc)
+                    self._rate_cache[cache_key] = (rate, now)
+                    logger.info(
+                        f"Exchange rate fetched: {from_currency}/{to_currency} = {rate}"
+                    )
+                    return rate, now, "live"
             except Exception as e:
                 logger.warning(f"API {api_url} failed: {e}")
                 continue
@@ -106,9 +117,9 @@ class ExchangeAgent:
         self, from_currency: str, to_currency: str, rate: float, source: str
     ) -> str:
         if source == "live":
-            source_text = "(cotacao em tempo real)"
+            source_text = "(cotação em tempo real)"
         elif source == "cached":
-            source_text = "(cotacao recente)"
+            source_text = "(cotação recente)"
         else:
-            source_text = "(cotacao indicativa)"
+            source_text = "(cotação indicativa)"
         return f"1 {from_currency} = {rate:.4f} {to_currency} {source_text}"

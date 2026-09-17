@@ -182,8 +182,9 @@ AUTHENTICATED ◄─────────────────────
 6. Controla tentativas (maximo 3)
 
 **Deteccao de Intencao**:
-- Usa LLM (se configurado) ou regras baseadas em keywords
-- Classifica em: `credit_limit`, `request_increase`, `exchange_rate`, `interview`, `other`
+- Regras por palavra inteira primeiro (0 ms); LLM (se configurado) apenas quando as regras nao classificam
+- Intents: `credit_limit`, `request_increase`, `exchange_rate`, `interview`, `greeting`, `goodbye`, `confirm`, `reject`, `off_topic`
+- Detalhes em `docs/llm-intent-architecture.md` e `docs/arquitetura-hibrida-v2.md`
 
 #### 2. Agente de Credito (credito.py)
 
@@ -383,10 +384,13 @@ O sistema suporta dois modos de classificacao de intencao:
 
 #### 2. Modo Regras (USE_LANGCHAIN=false)
 
-- Classificacao baseada em keywords
+- Classificacao por palavras-chave (palavra inteira, sem falsos positivos de substring)
 - Sem dependencias externas
-- Mais rapido e confiavel
 - Ideal para ambientes sem acesso a API
+
+Mesmo com o LLM ligado, as regras rodam primeiro e o LLM so e consultado quando elas nao
+classificam a mensagem. Chamadas ao LLM tem timeout curto (2,5 s intencao, 4 s humanizacao)
+e caem no modo regras/templates automaticamente.
 
 ### Humanizacao de Respostas
 
@@ -456,7 +460,12 @@ with lock:
 | `JWT_EXPIRATION_MINUTES` | Tempo expiracao token | 15 |
 | `USE_LANGCHAIN` | Ativar classificacao LLM | false |
 | `LLM_PROVIDER` | Provedor (openai/anthropic) | openai |
-| `LLM_MODEL` | Modelo a usar | gpt-4o-mini |
+| `LLM_MODEL` | Modelo OpenAI | gpt-4o-mini |
+| `ANTHROPIC_MODEL` | Modelo Anthropic | claude-haiku-4-5-20251001 |
+| `LLM_INTENT_TIMEOUT_SECONDS` | Timeout da classificacao de intencao | 2.5 |
+| `LLM_HUMANIZE_TIMEOUT_SECONDS` | Timeout da humanizacao | 4.0 |
+| `SESSION_TTL_MINUTES` | Sessoes de chat ociosas sao descartadas apos | 30 |
+| `MAX_AUTH_ATTEMPTS` | Tentativas de autenticacao antes de travar a sessao | 3 |
 | `OPENAI_API_KEY` | Chave API OpenAI | - |
 | `ANTHROPIC_API_KEY` | Chave API Anthropic | - |
 | `EXCHANGE_API_URL` | URL API de cambio | api.exchangerate-api.com |
@@ -516,13 +525,15 @@ docker run -d \
 
 ## Dados de Teste
 
-| CPF | Nome | Data Nascimento | Score | Limite |
-|-----|------|-----------------|-------|--------|
-| 12345678901 | Maria Silva | 15/05/1990 | 750 | R$ 15.000 |
-| 98765432100 | Joao Santos | 22/03/1985 | 600 | R$ 8.000 |
-| 11122233344 | Ana Oliveira | 08/11/1992 | 850 | R$ 25.000 |
-| 55566677788 | Carlos Souza | 30/07/1978 | 450 | R$ 2.500 |
-| 99988877766 | Beatriz Lima | 12/01/1995 | 300 | R$ 1.000 |
+| CPF | Nome | Data Nascimento | Score | Limite (tabela score) |
+|-----|------|-----------------|-------|-----------------------|
+| 52998224725 | Maria Helena Santos | 15/05/1990 | 315 | R$ 1.000 |
+| 71893456209 | João Pedro Oliveira | 22/03/1985 | 620 | R$ 8.000 |
+| 89156734502 | Ana Carolina Lima | 08/11/1992 | 609 | R$ 8.000 |
+| 34567891234 | Carlos Eduardo Souza | 30/07/1978 | 450 | R$ 3.000 |
+| 89123456789 | Patricia Souza Nascimento | 14/06/1976 | 920 | R$ 50.000 |
+
+Lista completa em `src/data/clientes.csv`. Os testes automatizados (`pytest`) usam uma base isolada em diretorio temporario e nao alteram esses arquivos.
 
 ---
 
@@ -540,7 +551,8 @@ IA-Agent-Tech-For-Humans-Back-end/
 ├── docs/
 │   ├── DESENVOLVIMENTO.md   # Jornada do desenvolvedor
 │   ├── DOCUMENTACAO-TECNICA.md  # Esta documentacao
-│   ├── architecture.md      # Arquitetura do sistema
+│   ├── arquitetura-hibrida-v2.md   # Arquitetura hibrida do orquestrador
+│   ├── llm-intent-architecture.md  # Classificacao de intencao (regras + LLM)
 │   └── otimizacao-tokens.md # Otimizacoes de tokens
 │
 ├── src/
@@ -571,7 +583,8 @@ IA-Agent-Tech-For-Humans-Back-end/
 │   ├── utils/
 │   │   ├── exceptions.py    # Excecoes
 │   │   ├── logging_config.py # Logs
-│   │   ├── text_normalizer.py # Normalizacao
+│   │   ├── formatting.py    # Formatacao R$ padrao brasileiro
+│   │   ├── text_normalizer.py # Normalizacao (palavra inteira)
 │   │   ├── token_monitor.py # Monitor tokens
 │   │   └── value_extractor.py # Extratores
 │   │
@@ -587,6 +600,8 @@ IA-Agent-Tech-For-Humans-Back-end/
     ├── test_entrevista.py
     ├── test_cambio.py
     ├── test_orchestrator.py
+    ├── test_conversation_ux.py  # Cenarios de conversa (intencao antes do login, cambio direto, escapes)
+    ├── test_intent_rules.py     # Classificacao por regras e fronteira de palavra
     ├── test_integration.py
     └── test_restrictions.py
 ```

@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import Optional
+from typing import Iterable, Optional
 
 
 def remove_accents(text: str) -> str:
@@ -14,6 +14,26 @@ def normalize_text(text: str) -> str:
     return text
 
 
+def contains_word(normalized_text: str, phrase: str) -> bool:
+    """Verifica se `phrase` aparece como palavra(s) inteira(s) no texto já normalizado.
+
+    Evita falsos positivos de substring ("um" em "aumentar", "ha" em "tchau",
+    "ia" em "dia"). Aceita plural simples ("limite" casa com "limites").
+    """
+    if not normalized_text or not phrase:
+        return False
+    pattern = rf"(?<!\w){re.escape(phrase)}s?(?!\w)"
+    return re.search(pattern, normalized_text) is not None
+
+
+def contains_any(normalized_text: str, phrases: Iterable[str]) -> bool:
+    return any(contains_word(normalized_text, p) for p in phrases)
+
+
+def has_digits(text: str) -> bool:
+    return any(ch.isdigit() for ch in text)
+
+
 def extract_cpf_from_text(text: str) -> Optional[str]:
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 11:
@@ -21,45 +41,87 @@ def extract_cpf_from_text(text: str) -> Optional[str]:
     return None
 
 
+UNCERTAIN_PHRASES = [
+    "nao sei",
+    "nao lembro",
+    "nao me lembro",
+    "nao tenho certeza",
+    "talvez",
+    "acho que",
+    "depende",
+]
+
+NEGATIVE_PHRASES = [
+    "nao",
+    "nunca",
+    "nenhum",
+    "nenhuma",
+    "nada",
+    "zero",
+    "negativo",
+    "falso",
+    "false",
+    "nem pensar",
+    "de jeito nenhum",
+    "sem divida",
+    "sem dividas",
+    "estou limpo",
+    "limpo",
+    "limpa",
+    "tudo pago",
+    "quitado",
+    "quitei",
+    "nao tenho",
+    "nao possuo",
+    "nao ha",
+    "nao devo",
+]
+
+AFFIRMATIVE_PHRASES = [
+    "sim",
+    "s",
+    "yes",
+    "verdade",
+    "verdadeiro",
+    "true",
+    "com certeza",
+    "claro",
+    "isso",
+    "exato",
+    "exatamente",
+    "correto",
+    "tenho",
+    "possuo",
+    "devo",
+    "positivo",
+    "infelizmente",
+    "tenho divida",
+    "tenho dividas",
+    "cartao atrasado",
+    "nome sujo",
+    "atrasado",
+    "atrasada",
+    "em aberto",
+    "emprestimo",
+]
+
+
 def parse_boolean_response(text: str) -> Optional[bool]:
     normalized = normalize_text(text)
+    if not normalized:
+        return None
 
-    uncertainty = ["nao sei", "nao lembro", "nao tenho certeza", "talvez", "acho que", "nao me lembro"]
-    for p in uncertainty:
-        if p in normalized:
-            return None
+    if contains_any(normalized, UNCERTAIN_PHRASES):
+        return None
 
-    negative = [
-        "nao", "falso", "false", "negativo", "nunca", "nem pensar", "de jeito nenhum",
-        "nao tenho", "nenhum", "nenhuma", "zero", "nada", "sem divida", "sem dividas",
-        "estou limpo", "limpo", "tudo pago", "quitado", "nao possuo", "nao ha",
-    ]
+    has_negative = contains_any(normalized, NEGATIVE_PHRASES)
+    has_affirmative = contains_any(normalized, AFFIRMATIVE_PHRASES)
 
-    affirmative = [
-        "sim", "yes", "verdade", "verdadeiro", "true", "com certeza", "claro",
-        "isso", "exato", "exatamente", "correto", "tenho", "possuo", "ha",
-        "infelizmente sim", "sim tenho", "tem sim", "tenho sim", "tenho divida",
-    ]
-
-    if normalized == "s":
-        return True
-
-    for p in negative:
-        if p in normalized:
-            if p.startswith("nao") or p in ["sem divida", "sem dividas", "estou limpo", "limpo", "tudo pago", "quitado", "nenhum", "nenhuma", "zero", "nada", "nunca", "falso", "false", "negativo"]:
-                return False
-
-    for p in affirmative:
-        if p in normalized:
-            has_neg = any(n in normalized for n in ["nao", "sem", "nenhum", "nunca"])
-            if not has_neg:
-                return True
-
-    if "nao" in normalized or "sem" in normalized:
+    if has_negative:
+        # "nao tenho dividas" -> a negacao prevalece sobre o "tenho"
         return False
-    if "sim" in normalized or "tenho" in normalized:
+    if has_affirmative:
         return True
-
     return None
 
 

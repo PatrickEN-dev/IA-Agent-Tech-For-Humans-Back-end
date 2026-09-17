@@ -21,18 +21,27 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.3
     llm_max_tokens: int = 100
     llm_model: str = "gpt-4o-mini"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+
+    # Tempo maximo esperando o LLM antes de cair no fallback por regras/template.
+    llm_intent_timeout_seconds: float = 2.5
+    llm_humanize_timeout_seconds: float = 4.0
+    intent_cache_max_size: int = 500
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 
     exchange_api_url: str = "https://api.exchangerate-api.com/v4/latest"
     exchange_api_key: str | None = None
+    exchange_api_timeout_seconds: float = 4.0
 
     log_level: str = "INFO"
 
     data_dir: Path = Path("src/data")
 
     max_auth_attempts: int = 3
+    session_ttl_minutes: int = 30
+    max_conversation_history: int = 20
 
     @property
     def clients_csv_path(self) -> Path:

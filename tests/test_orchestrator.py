@@ -266,11 +266,35 @@ async def test_unified_exchange_flow(client: AsyncClient) -> None:
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "cotação do dólar"},
+        json={"session_id": session_id, "message": "cotação"},
     )
     assert response.status_code == 200
     data = response.json()
     assert data["state"] == "exchange_from"
+
+
+@pytest.mark.asyncio
+async def test_unified_exchange_direct_when_currency_given(client: AsyncClient) -> None:
+    init_response = await client.post("/unified/init")
+    session_id = init_response.json()["session_id"]
+
+    await client.post(
+        "/unified/chat",
+        json={"session_id": session_id, "message": "12345678901"},
+    )
+    await client.post(
+        "/unified/chat",
+        json={"session_id": session_id, "message": "15/05/1990"},
+    )
+
+    response = await client.post(
+        "/unified/chat",
+        json={"session_id": session_id, "message": "cotação do dólar"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["state"] == "authenticated"
+    assert "USD" in data["message"] and "BRL" in data["message"]
 
 
 @pytest.mark.asyncio
@@ -288,19 +312,16 @@ async def test_unified_exchange_complete(client: AsyncClient) -> None:
     )
     await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "cotação do dólar"},
-    )
-    await client.post(
-        "/unified/chat",
-        json={"session_id": session_id, "message": "USD"},
+        json={"session_id": session_id, "message": "câmbio"},
     )
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "BRL"},
+        json={"session_id": session_id, "message": "USD"},
     )
     assert response.status_code == 200
     data = response.json()
+    assert data["state"] == "authenticated"
     assert "USD" in data["message"] and "BRL" in data["message"]
 
 
@@ -587,18 +608,14 @@ async def test_unified_currency_jpy(client: AsyncClient) -> None:
         "/unified/chat",
         json={"session_id": session_id, "message": "cotação"},
     )
-    await client.post(
-        "/unified/chat",
-        json={"session_id": session_id, "message": "JPY"},
-    )
 
     response = await client.post(
         "/unified/chat",
-        json={"session_id": session_id, "message": "BRL"},
+        json={"session_id": session_id, "message": "JPY"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert "JPY" in data["message"]
+    assert "JPY" in data["message"] and "BRL" in data["message"]
 
 
 @pytest.mark.asyncio

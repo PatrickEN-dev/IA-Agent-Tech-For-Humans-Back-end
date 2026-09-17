@@ -11,6 +11,7 @@ from src.models.schemas import ChatRequest, ChatResponse
 from src.services.auth_service import AuthService
 from src.services.csv_service import CSVService
 from src.services.llm_service import LLMService
+from src.utils.text_normalizer import contains_any, normalize_text
 from src.utils.token_monitor import token_monitor
 
 logger = logging.getLogger(__name__)
@@ -18,21 +19,16 @@ logger = logging.getLogger(__name__)
 BANKING_KEYWORDS = {
     "limite",
     "credito",
-    "crédito",
     "cartao",
-    "cartão",
     "conta",
     "saldo",
     "banco",
     "pix",
     "transferencia",
-    "transferência",
     "emprestimo",
-    "empréstimo",
     "financiamento",
     "investimento",
     "poupanca",
-    "poupança",
     "cheque",
     "aumento",
     "score",
@@ -41,17 +37,12 @@ BANKING_KEYWORDS = {
     "perfil",
     "renda",
     "salario",
-    "salário",
     "cambio",
-    "câmbio",
     "dolar",
-    "dólar",
     "euro",
     "moeda",
     "cotacao",
-    "cotação",
     "divida",
-    "dívida",
     "parcela",
     "juros",
     "taxa",
@@ -59,49 +50,36 @@ BANKING_KEYWORDS = {
     "anuidade",
     "entrevista",
     "questionario",
-    "questionário",
     "dados",
     "informacoes",
-    "informações",
 }
 
 FORBIDDEN_TOPICS = {
     "matematica",
-    "matemática",
     "calculo",
-    "cálculo",
     "historia",
-    "história",
     "geografia",
     "ciencia",
-    "ciência",
     "tecnologia",
     "programacao",
-    "programação",
     "receita",
     "culinaria",
-    "culinária",
     "medicina",
     "saude",
-    "saúde",
     "esporte",
     "futebol",
     "politica",
-    "política",
     "religiao",
-    "religião",
     "filosofia",
     "psicologia",
     "entretenimento",
     "filme",
     "musica",
-    "música",
     "sentido da vida",
     "relacionamento",
     "amor",
     "familia",
-    "família",
-    "quanto é",
+    "quanto e",
     "resultado",
     "descobriu",
     "brasil",
@@ -111,13 +89,9 @@ FORBIDDEN_TOPICS = {
     "pedro alvares",
     "cabral",
     "multiplicacao",
-    "multiplicação",
     "soma",
     "subtracao",
-    "subtração",
     "divisao",
-    "divisão",
-    "pedro álvares",
 }
 
 
@@ -150,19 +124,16 @@ class OptimizedChatAgent:
         self._cache_max_size = 100
 
     def _is_banking_related(self, message: str) -> bool:
-        message_lower = message.lower()
+        normalized = normalize_text(message)
 
-        for forbidden in FORBIDDEN_TOPICS:
-            if forbidden in message_lower:
-                return False
+        if contains_any(normalized, FORBIDDEN_TOPICS):
+            return False
 
-        for keyword in BANKING_KEYWORDS:
-            if keyword in message_lower:
-                return True
+        if contains_any(normalized, BANKING_KEYWORDS):
+            return True
 
         greetings = {
             "oi",
-            "olá",
             "ola",
             "bom dia",
             "boa tarde",
@@ -170,18 +141,17 @@ class OptimizedChatAgent:
             "hey",
             "hello",
         }
-        if any(greeting in message_lower for greeting in greetings):
+        if contains_any(normalized, greetings):
             return True
 
         bank_questions = {
             "que banco",
             "qual banco",
             "banco agil",
-            "banco ágil",
-            "quem é",
+            "quem e",
             "o que faz",
         }
-        if any(q in message_lower for q in bank_questions):
+        if contains_any(normalized, bank_questions):
             return True
 
         return False
@@ -372,13 +342,9 @@ class OptimizedChatAgent:
     async def _try_authentication(self, session: SessionData) -> None:
         try:
             client = await self._csv_service.get_client_by_cpf(session.cpf)
-            if client and client.birth_date == session.birthdate:
-                auth_result = await self._auth_service.authenticate(
-                    session.cpf, session.birthdate
-                )
-                if auth_result.authenticated:
-                    session.state = ConversationState.AUTHENTICATED
-                    session.token = auth_result.token
+            if client and date.fromisoformat(client.data_nascimento) == session.birthdate:
+                session.state = ConversationState.AUTHENTICATED
+                session.token = self._auth_service.create_token(session.cpf)
         except Exception as e:
             logger.error(f"Erro na autenticação: {e}")
 
