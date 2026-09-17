@@ -1,0 +1,102 @@
+{"text": "quero ver meu limite", "intent": "credit_limit"}
+{"text": "qual é o meu limite de crédito?", "intent": "credit_limit"}
+{"text": "meu limite", "intent": "credit_limit"}
+{"text": "quanto eu tenho de limite hoje", "intent": "credit_limit"}
+{"text": "consultar limite", "intent": "credit_limit"}
+{"text": "queria saber meu score", "intent": "credit_limit"}
+{"text": "qual meu score atual", "intent": "credit_limit"}
+{"text": "me mostra o limite do cartão", "intent": "credit_limit"}
+{"text": "quanto posso gastar no cartão", "intent": "credit_limit"}
+{"text": "ver limite atual por favor", "intent": "credit_limit"}
+{"text": "cadê meu limite", "intent": "credit_limit"}
+{"text": "tô com quanto de limite", "intent": "credit_limit"}
+{"text": "quero aumentar meu limite", "intent": "request_increase"}
+{"text": "preciso de mais limite", "intent": "request_increase"}
+{"text": "solicitar aumento de limite", "intent": "request_increase"}
+{"text": "dá pra subir meu limite?", "intent": "request_increase"}
+{"text": "quero pedir aumento", "intent": "request_increase"}
+{"text": "aumenta meu limite pra 10 mil", "intent": "request_increase"}
+{"text": "gostaria de ampliar meu crédito", "intent": "request_increase"}
+{"text": "meu limite tá baixo, quero mais", "intent": "request_increase"}
+{"text": "como faço pra elevar o limite", "intent": "request_increase"}
+{"text": "preciso de um limite maior pra viagem", "intent": "request_increase"}
+{"text": "quero 20 mil de limite", "intent": "request_increase"}
+{"text": "tem como aumentar?", "intent": "request_increase"}
+{"text": "cotação do dólar", "intent": "exchange_rate"}
+{"text": "quanto está o euro hoje", "intent": "exchange_rate"}
+{"text": "qual a cotação da libra", "intent": "exchange_rate"}
+{"text": "quero converter dólar para real", "intent": "exchange_rate"}
+{"text": "câmbio", "intent": "exchange_rate"}
+{"text": "USD para BRL", "intent": "exchange_rate"}
+{"text": "quanto vale 1 dólar em reais", "intent": "exchange_rate"}
+{"text": "preço do iene", "intent": "exchange_rate"}
+{"text": "conversão de moedas", "intent": "exchange_rate"}
+{"text": "o peso argentino tá quanto", "intent": "exchange_rate"}
+{"text": "quero saber o valor do euro", "intent": "exchange_rate"}
+{"text": "taxa de câmbio hoje", "intent": "exchange_rate"}
+{"text": "quero atualizar meu perfil financeiro", "intent": "interview"}
+{"text": "fazer a entrevista", "intent": "interview"}
+{"text": "como melhorar meu score", "intent": "interview"}
+{"text": "quero aumentar meu score", "intent": "interview"}
+{"text": "atualizar meus dados", "intent": "interview"}
+{"text": "preciso atualizar minha renda", "intent": "interview"}
+{"text": "quero refazer meu cadastro financeiro", "intent": "interview"}
+{"text": "vamos fazer o questionário", "intent": "interview"}
+{"text": "atualizar informações financeiras", "intent": "interview"}
+{"text": "quero informar minha renda nova", "intent": "interview"}
+{"text": "oi", "intent": "greeting"}
+{"text": "olá", "intent": "greeting"}
+{"text": "bom dia", "intent": "greeting"}
+{"text": "boa tarde", "intent": "greeting"}
+{"text": "boa noite", "intent": "greeting"}
+{"text": "e aí, tudo bem?", "intent": "greeting"}
+{"text": "opa", "intent": "greeting"}
+{"text": "hello", "intent": "greeting"}
+{"text": "oi, tudo bom?", "intent": "greeting"}
+{"text": "alô", "intent": "greeting"}
+{"text": "tchau", "intent": "goodbye"}
+{"text": "obrigado, tchau", "intent": "goodbye"}
+{"text": "era só isso", "intent": "goodbye"}
+{"text": "pode encerrar", "intent": "goodbye"}
+{"text": "até logo", "intent": "goodbye"}
+{"text": "não preciso de mais nada", "intent": "goodbye"}
+{"text": "falou", "intent": "goodbye"}
+{"text": "por hoje é só", "intent": "goodbye"}
+{"text": "quero sair", "intent": "goodbye"}
+{"text": "finalizar atendimento", "intent": "goodbye"}
+{"text": "sim", "intent": "confirm"}
+{"text": "pode ser", "intent": "confirm"}
+{"text": "claro", "intent": "confirm"}
+{"text": "quero sim", "intent": "confirm"}
+{"text": "vamos lá", "intent": "confirm"}
+{"text": "beleza", "intent": "confirm"}
+{"text": "com certeza", "intent": "confirm"}
+{"text": "aceito", "intent": "confirm"}
+{"text": "perfeito", "intent": "confirm"}
+{"text": "isso mesmo", "intent": "confirm"}
+{"text": "fechado", "intent": "confirm"}
+{"text": "bora", "intent": "confirm"}
+{"text": "não", "intent": "reject"}
+{"text": "não quero", "intent": "reject"}
+{"text": "agora não", "intent": "reject"}
+{"text": "talvez depois", "intent": "reject"}
+{"text": "deixa pra lá", "intent": "reject"}
+{"text": "não precisa", "intent": "reject"}
+{"text": "dispenso", "intent": "reject"}
+{"text": "mais tarde", "intent": "reject"}
+{"text": "nem", "intent": "reject"}
+{"text": "não obrigado", "intent": "reject"}
+{"text": "qual a previsão do tempo?", "intent": "off_topic"}
+{"text": "me conta uma piada", "intent": "off_topic"}
+{"text": "quem ganhou o jogo ontem", "intent": "off_topic"}
+{"text": "qual a capital da França", "intent": "off_topic"}
+{"text": "você é humano?", "intent": "off_topic"}
+{"text": "me ajuda com meu dever de casa", "intent": "off_topic"}
+{"text": "qual seu time de futebol", "intent": "off_topic"}
+{"text": "escreve um poema pra mim", "intent": "off_topic"}
+{"text": "asdfghjkl", "intent": "other"}
+{"text": "...", "intent": "other"}
+{"text": "hmm", "intent": "other"}
+{"text": "sei lá", "intent": "other"}
+{"text": "????", "intent": "other"}
+{"text": "pode repetir?", "intent": "other"}

@@ -43,6 +43,11 @@ jobs:
       - name: Testes com cobertura
         run: pytest --cov=src --cov-report=term-missing --cov-fail-under=80
 
+      - name: Avaliacao do classificador de intencao
+        # Roda so no modo regras: sem chave de LLM e sem rede. A trava existe para que
+        # uma palavra-chave nova nao derrube a acuracia sem ninguem perceber.
+        run: python scripts/eval_intents.py --fail-under 90
+
       - name: Smoke do seed em banco limpo
         # Garante que um deploy novo sobe com o banco populado, e que rodar duas vezes
         # não duplica nada.

@@ -1132,7 +1132,9 @@ class Orchestrator:
             f"{prefix}"
             f"Seu limite atual: {format_brl(result.current_limit)}\n"
             f"Score: {result.score}\n"
-            f"Teto para esse score: {format_brl(result.max_limit_for_score)}\n\n"
+            # Rótulo curto de propósito: o front monta a tabela de "Rótulo: valor" só
+            # até três palavras, para não transformar frases inteiras em linha de tabela.
+            f"Teto do score: {format_brl(result.max_limit_for_score)}\n\n"
             + self._increase_hint(result)
         )
 

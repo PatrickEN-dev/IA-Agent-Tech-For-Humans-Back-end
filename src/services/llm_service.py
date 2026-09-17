@@ -75,6 +75,10 @@ INTENT_KEYWORDS: dict[str, list[str]] = {
         "increase",
         "mais limite",
         "subir limite",
+        # "da pra subir meu limite?" e "preciso de um limite maior": o verbo e o
+        # adjetivo sozinhos ja indicam aumento, sem precisar colar em "limite".
+        "subir",
+        "maior",
         "elevar",
         "ampliar",
         "solicitar aumento",
@@ -227,6 +231,11 @@ GREETING_PHRASES = [
 
 # Respostas curtas que sozinhas significam "nao" mas seriam ambiguas dentro de uma frase
 STANDALONE_REJECT = {"no", "n", "nn", "nao", "não"}
+
+# "nao quero", "nem precisa": a frase comeca negando o proprio verbo de vontade.
+NEGATED_INTENT_PATTERN = re.compile(
+    r"^(nao|nem)\s+(quero|queria|precisa|preciso|desejo|gostaria|vou|obrigado|obrigada)(?!\w)"
+)
 
 INTENT_SYSTEM_PROMPT = (
     "Você classifica a intenção de mensagens de clientes de um chatbot bancário "
@@ -556,9 +565,33 @@ class LLMService:
                 scores[intent] = score
 
         if scores:
+            # "consultar limite" e "aumentar limite" compartilham a palavra "limite",
+            # que sozinha pontua alto para a consulta. Quando os dois aparecem, o verbo
+            # de acao decide — mas so se nenhuma outra intencao pontuou mais que eles.
+            # Sem essa ressalva, "quero aumentar meu score" (entrevista) era desviado
+            # para aumento de limite; sem a regra, "quero aumentar meu limite" virava
+            # consulta. Os dois casos estao no conjunto de avaliacao.
             if "credit_limit" in scores and "request_increase" in scores:
-                # "quero aumentar meu limite": a acao (aumentar) e mais especifica
-                logger.debug("Rule-based intent: request_increase (action priority)")
+                par = max(scores["credit_limit"], scores["request_increase"])
+                rival = max(
+                    (
+                        score
+                        for intent, score in scores.items()
+                        if intent not in ("credit_limit", "request_increase")
+                    ),
+                    default=0,
+                )
+                if rival <= par:
+                    logger.debug("Rule-based intent: request_increase (action priority)")
+                    return "request_increase"
+
+            # "quero 20 mil de limite": ninguem cita um valor para perguntar quanto tem.
+            # Um numero junto de palavra de limite e pedido, nao consulta.
+            if (
+                set(scores) == {"credit_limit"}
+                and extract_monetary_value(message) is not None
+            ):
+                logger.debug("Rule-based intent: request_increase (valor citado)")
                 return "request_increase"
 
             if len(scores) == 1:
@@ -576,6 +609,12 @@ class LLMService:
         if contains_any(normalized, GOODBYE_PHRASES):
             return "goodbye"
 
+        # Saudacao antes de confirmar/recusar: "boa tarde" casa com "boa" da lista de
+        # confirmacao, e tratar um cumprimento como aceite faz o cliente aceitar uma
+        # oferta que nunca leu.
+        if contains_any(normalized, GREETING_PHRASES):
+            return "greeting"
+
         is_confirm = contains_any(normalized, CONFIRM_PHRASES)
         is_reject = contains_any(normalized, REJECT_PHRASES)
         if is_reject and not is_confirm:
@@ -583,10 +622,11 @@ class LLMService:
         if is_confirm and not is_reject:
             return "confirm"
         if is_confirm and is_reject:
+            # "nao quero", "nao precisa": a negacao no inicio vale mais que o verbo
+            # que vem depois. Sem isso a frase mais comum de recusa ficava sem rotulo.
+            if NEGATED_INTENT_PATTERN.match(normalized):
+                return "reject"
             return None
-
-        if contains_any(normalized, GREETING_PHRASES):
-            return "greeting"
 
         return None
 
