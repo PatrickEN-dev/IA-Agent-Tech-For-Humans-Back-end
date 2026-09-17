@@ -5,7 +5,7 @@
 # O Dependabot abre PR para subir cada pino, e o CI decide se sobe.
 
 fastapi==0.128.0
-uvicorn[standard]==0.40.0
+uvicorn[standard]==0.53.0
 pydantic[email]==2.12.5
 pydantic-settings==2.12.0
 python-jose[cryptography]==3.5.0
