@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 from datetime import date
@@ -63,6 +64,9 @@ CANCEL_PHRASES = [
 ]
 
 NEGATION_PHRASES = ["nao", "agora nao", "depois", "nunca", "nem", "dispenso"]
+
+# "nao quero aumento", "nao preciso de entrevista": pedido negado logo no inicio da frase
+NEGATED_REQUEST_PATTERN = re.compile(r"^(nao|nem)\s+(quero|preciso|desejo|gostaria|vou querer)(?!\w)")
 
 INTENT_LABELS = {
     "credit_limit": "consultar seu limite",
@@ -526,6 +530,16 @@ class Orchestrator:
             # Mudou de assunto: descarta a oferta e segue com a nova intencao
             session.pending_redirect = None
 
+        if intent in BANKING_INTENTS and self._is_negated_request(message):
+            # "nao quero aumento" sem oferta pendente: a intencao bancaria nao e um pedido
+            return await self._build_humanized_response(
+                session_id,
+                session,
+                technical_message=f"Tudo bem! Posso ajudar com mais alguma coisa?\n{MENU_TEXT}",
+                user_message=message,
+                authenticated=True,
+            )
+
         return await self._dispatch_intent(session_id, session, intent, message)
 
     async def _dispatch_intent(
@@ -983,6 +997,9 @@ class Orchestrator:
 
     def _has_negation(self, message: str) -> bool:
         return contains_any(normalize_text(message), NEGATION_PHRASES)
+
+    def _is_negated_request(self, message: str) -> bool:
+        return NEGATED_REQUEST_PATTERN.match(normalize_text(message)) is not None
 
     def _get_available_actions(self, session: OrchestratorSession) -> list[str]:
         if not session.token:

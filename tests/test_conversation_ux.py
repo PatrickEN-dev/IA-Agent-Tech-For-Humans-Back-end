@@ -207,6 +207,17 @@ class TestPendingOffers:
         assert "tudo bem" in data["message"].lower()
 
     @pytest.mark.asyncio
+    async def test_negated_request_without_offer_shows_menu(self, client: AsyncClient) -> None:
+        session_id = await authenticate(client)
+        data = await say(client, session_id, "não quero aumento")
+        assert data["state"] == "authenticated"
+        assert "tudo bem" in data["message"].lower()
+
+        # negacao que nao e recusa continua sendo atendida
+        data = await say(client, session_id, "não sei meu limite, pode ver?")
+        assert "R$" in data["message"]
+
+    @pytest.mark.asyncio
     async def test_topic_change_clears_offer(self, client: AsyncClient) -> None:
         session_id = await authenticate(client)
         await say(client, session_id, "meu limite")
