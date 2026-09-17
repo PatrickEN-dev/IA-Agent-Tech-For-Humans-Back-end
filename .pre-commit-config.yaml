@@ -1,0 +1,29 @@
+# Instale com: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      # Impede commitar .env com chave de verdade.
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: cpf-validos
+        name: CPFs da base sao validos
+        entry: python scripts/fix_client_cpfs.py --check
+        language: system
+        files: ^src/data/clientes\.csv$
+        pass_filenames: false

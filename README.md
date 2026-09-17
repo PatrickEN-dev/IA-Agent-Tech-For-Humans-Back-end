@@ -309,7 +309,21 @@ com a API mockada no browser — não dependem deste repositório).
   via `contextvars` — é como se reconstrói uma conversa específica no meio do log.
 - Logs em JSON com `JSON_LOGS=true`, filtráveis por `request_id`.
 - `/health` expõe `turns_total`, `llm_turns_total` e `llm_turn_ratio`: a fração de turnos
-  que custou uma chamada ao modelo, medida em produção.
+  que custou uma chamada ao modelo, medida em produção. Em um percurso completo de
+  demonstração (30 turnos, LLM ligado), 2 turnos chamaram o modelo — **6,7%**.
+
+---
+
+## Hibernação no Render
+
+O plano gratuito hiberna o serviço após 15 minutos sem tráfego, e acordar leva cerca de um
+minuto. O front avisa que o assistente está iniciando, mas a rede de segurança não
+substitui a solução: um monitor externo (cron-job.org ou UptimeRobot) chamando
+`GET /health` a cada 10 minutos mantém o serviço de pé.
+
+O workspace tem 750 horas de instância por mês, e um serviço sempre ativo consome no
+máximo 744 em um mês de 31 dias — cabe, desde que este seja o único serviço gratuito do
+workspace. Se houver outro, restrinja o monitor a uma janela (por exemplo 8h às 22h).
 
 ---
 
