@@ -152,9 +152,11 @@ class SignupService:
         address = await self._addresses.lookup(cep) if cep else None
 
         score = self._settings.signup_initial_score
-        # Conta nova entra com o teto da faixa como limite: é o comportamento de um
-        # banco real na abertura, e dá material para o cliente pedir aumento depois.
-        initial_limit = await self._score_service.get_limit_for_score(score)
+        ceiling = await self._score_service.get_limit_for_score(score)
+        # Conta nova não nasce no teto: um banco concede uma parte e deixa o resto para
+        # o relacionamento. Aqui isso também é o que torna o produto demonstrável —
+        # quem acabou de se cadastrar consegue pedir um aumento e vê-lo ser aprovado.
+        initial_limit = round(ceiling * self._settings.signup_initial_limit_ratio, 2)
 
         client = await self._clients.create(
             Client(
@@ -181,7 +183,7 @@ class SignupService:
 
         return SignupResult(
             client=client,
-            max_limit_for_score=initial_limit,
+            max_limit_for_score=ceiling,
             address_label=address.short() if address else None,
             cpf_provider=verification.provider,
             cpf_verified_externally=verification.verified_externally,

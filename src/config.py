@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     signup_enabled: bool = True
     signup_initial_score: int = 500
     signup_min_age_years: int = 18
+    # Fracao do teto concedida na abertura da conta; o resto vem via aumento.
+    signup_initial_limit_ratio: float = 0.4
 
     # Consulta de CEP (BrasilAPI é pública e não exige chave).
     address_api_url: str = "https://brasilapi.com.br/api/cep/v2"

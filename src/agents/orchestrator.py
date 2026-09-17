@@ -981,7 +981,8 @@ class Orchestrator:
             f"CPF: {format_cpf(client.cpf)}\n"
             f"Nascimento: {date.fromisoformat(client.data_nascimento).strftime('%d/%m/%Y')}\n"
             f"Score inicial: {client.score}\n"
-            f"Limite: {format_brl(client.limite_atual)}\n\n"
+            f"Limite: {format_brl(client.limite_atual)} "
+            f"(teto do seu score: {format_brl(result.max_limit_for_score)})\n\n"
             "Guarde o CPF e a data: é com eles que você entra de novo."
         )
 
@@ -1523,6 +1524,14 @@ class Orchestrator:
 
         if redirect.target_agent == "credit_increase":
             session.current_agent = AgentType.CREDIT
+
+            # "quero 1 milhão" é ao mesmo tempo o aceite da oferta e o valor pedido.
+            # Sem isto, "quero" era lido só como confirmação e a pergunta seguinte
+            # ignorava o número que o cliente acabara de dizer.
+            value, _ = self._parser.parse_limit_value(message)
+            if value is not None and value >= MIN_AUTO_LIMIT_VALUE:
+                return await self._process_increase(session_id, session, value)
+
             session.state = OrchestratorState.CREDIT_INCREASE_FLOW
             return self._build_response(
                 session_id,

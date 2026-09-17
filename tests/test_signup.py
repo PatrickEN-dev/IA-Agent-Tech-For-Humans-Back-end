@@ -298,3 +298,33 @@ async def test_cpf_desconhecido_oferece_caminho_de_saida(client: AsyncClient) ->
     mensagem = data["message"].lower()
     assert "demonstra" in mensagem
     assert "criar conta" in mensagem
+
+
+@pytest.mark.asyncio
+async def test_conta_nova_nasce_com_espaco_para_aumento(client: AsyncClient) -> None:
+    """Quem acabou de se cadastrar precisa conseguir pedir um aumento e ver aprovado.
+
+    Nascer no teto deixava o caminho mais importante do produto inalcançável para
+    quem acabou de entrar.
+    """
+    criada = await client.post(
+        "/signup", json={"nome": "Helena Nova", "data_nascimento": "1990-06-06"}
+    )
+    assert criada.status_code == 201
+
+    data = criada.json()
+    assert data["current_limit"] < data["max_limit_for_score"]
+
+    auth = await client.post(
+        "/triage/authenticate",
+        json={"cpf": data["cpf"], "birthdate": "1990-06-06"},
+    )
+    token = auth.json()["token"]
+
+    aumento = await client.post(
+        "/credit/request_increase",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_limit": data["max_limit_for_score"]},
+    )
+    assert aumento.status_code == 200
+    assert aumento.json()["status"] == "approved"

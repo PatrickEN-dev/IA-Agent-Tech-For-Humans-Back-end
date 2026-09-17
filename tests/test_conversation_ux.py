@@ -297,3 +297,31 @@ class TestSessionLifecycle:
         data = await say(client, session_id, "quem descobriu o brasil?")
         assert data["state"] == "authenticated"
         assert "limite" in data["message"].lower()
+
+
+class TestOfertaRespondidaComValor:
+    @pytest.mark.asyncio
+    async def test_aceite_com_valor_nao_repete_a_pergunta(
+        self, client: AsyncClient
+    ) -> None:
+        """"quero 1 milhao" e aceite e valor na mesma frase.
+
+        "quero" sozinho e confirmacao; com um numero junto, o valor nao pode ser
+        descartado para perguntar de novo o que o cliente ja respondeu.
+        """
+        session_id = await authenticate(client)
+        await say(client, session_id, "meu limite")
+
+        data = await say(client, session_id, "quero 1 milhao")
+        assert data["state"] == "authenticated"
+        assert "qual valor" not in data["message"].lower()
+        assert "R$ 1.000.000,00" in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_aceite_sem_valor_ainda_pergunta(self, client: AsyncClient) -> None:
+        session_id = await authenticate(client)
+        await say(client, session_id, "meu limite")
+
+        data = await say(client, session_id, "quero sim")
+        assert data["state"] == "credit_increase_flow"
+        assert "qual valor" in data["message"].lower()
