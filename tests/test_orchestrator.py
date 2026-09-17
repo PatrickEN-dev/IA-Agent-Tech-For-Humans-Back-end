@@ -248,6 +248,14 @@ async def test_unified_interview_full_flow(client: AsyncClient) -> None:
         json={"session_id": session_id, "message": "não"},
     )
     assert response.status_code == 200
+    # Coleta completa: o resumo aparece antes de qualquer gravacao.
+    assert response.json()["state"] == "interview_confirm"
+
+    response = await client.post(
+        "/unified/chat",
+        json={"session_id": session_id, "message": "sim"},
+    )
+    assert response.status_code == 200
     data = response.json()
     assert "score" in data["message"].lower() or "concluída" in data["message"].lower()
 
@@ -525,6 +533,13 @@ async def test_unified_interview_with_natural_language(client: AsyncClient) -> N
     response = await client.post(
         "/unified/chat",
         json={"session_id": session_id, "message": "não tenho dívidas"},
+    )
+    assert response.status_code == 200
+    assert response.json()["state"] == "interview_confirm"
+
+    response = await client.post(
+        "/unified/chat",
+        json={"session_id": session_id, "message": "sim"},
     )
     assert response.status_code == 200
     data = response.json()

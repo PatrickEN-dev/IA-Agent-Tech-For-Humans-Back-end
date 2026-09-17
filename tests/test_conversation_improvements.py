@@ -171,7 +171,9 @@ class TestInterviewFeedback:
         await say(client, session_id, "3000")
         await say(client, session_id, "2")
         data = await say(client, session_id, "não")
+        assert data["state"] == "interview_confirm"
 
+        data = await say(client, session_id, "sim")
         message = data["message"].lower()
         assert "score anterior" in message
         assert "pontos" in message or "manteve" in message

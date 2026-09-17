@@ -25,12 +25,14 @@ from src.services.signup_service import SignupError, SignupService
 from src.services.telemetry import telemetry
 from src.utils.cpf import format_cpf, is_valid_cpf, mask_cpf
 from src.utils.formatting import format_brl, format_datetime_brt
+from src.utils.profile_extractor import extract_profile
 from src.utils.text_normalizer import (
     contains_any,
     count_digits,
     extract_cpf_from_text,
     has_digits,
     normalize_text,
+    parse_boolean_response,
     parse_date_from_text,
 )
 from src.utils.value_extractor import extract_currency_codes
@@ -132,6 +134,7 @@ class OrchestratorState(str, Enum):
     INTERVIEW_EXPENSES = "interview_expenses"
     INTERVIEW_DEPENDENTS = "interview_dependents"
     INTERVIEW_DEBTS = "interview_debts"
+    INTERVIEW_CONFIRM = "interview_confirm"
     EXCHANGE_FLOW = "exchange_flow"
     EXCHANGE_FROM = "exchange_from"
     EXCHANGE_TO = "exchange_to"
@@ -149,6 +152,7 @@ INTERVIEW_STATES = {
     OrchestratorState.INTERVIEW_EXPENSES,
     OrchestratorState.INTERVIEW_DEPENDENTS,
     OrchestratorState.INTERVIEW_DEBTS,
+    OrchestratorState.INTERVIEW_CONFIRM,
 }
 
 EXCHANGE_STATES = {
@@ -209,6 +213,42 @@ GENERATE_CPF_PHRASES = [
 ]
 
 SKIP_PHRASES = ["pular", "pula", "nao quero", "prefiro nao", "deixa", "sem cep", "nao"]
+
+# Ordem em que a entrevista pergunta o que ainda falta. Dirigir o fluxo por campo (e não
+# por estado fixo) é o que permite pular perguntas já respondidas na frase de abertura.
+INTERVIEW_QUESTIONS: list[tuple[str, OrchestratorState, str]] = [
+    ("renda_mensal", OrchestratorState.INTERVIEW_INCOME, "Qual é a sua renda mensal?"),
+    (
+        "tipo_emprego",
+        OrchestratorState.INTERVIEW_EMPLOYMENT,
+        "Qual seu tipo de trabalho? CLT, autônomo, MEI, servidor público ou desempregado?",
+    ),
+    (
+        "despesas",
+        OrchestratorState.INTERVIEW_EXPENSES,
+        "Qual o total das suas despesas mensais?",
+    ),
+    (
+        "num_dependentes",
+        OrchestratorState.INTERVIEW_DEPENDENTS,
+        "Quantos dependentes você tem?",
+    ),
+    (
+        "tem_dividas",
+        OrchestratorState.INTERVIEW_DEBTS,
+        "Você tem alguma dívida em aberto? (sim/não)",
+    ),
+]
+
+# Rótulos legíveis do tipo de vínculo, usados no resumo de confirmação.
+EMPREGO_LABEL = {
+    "CLT": "CLT",
+    "FORMAL": "vínculo formal",
+    "PUBLICO": "servidor público",
+    "AUTONOMO": "autônomo",
+    "MEI": "MEI",
+    "DESEMPREGADO": "sem vínculo no momento",
+}
 
 
 class OrchestratorSession:
@@ -482,6 +522,8 @@ class Orchestrator:
             return "Quantos dependentes você tem?"
         if state == OrchestratorState.INTERVIEW_DEBTS:
             return "Você tem alguma dívida em aberto? (sim/não)"
+        if state == OrchestratorState.INTERVIEW_CONFIRM:
+            return "Posso atualizar seu perfil com essas informações? (sim/não)"
         if state == OrchestratorState.EXCHANGE_FROM:
             return "Qual moeda você quer converter? (USD, EUR, GBP, JPY, ARS)"
         if state == OrchestratorState.EXCHANGE_TO:
@@ -1078,7 +1120,7 @@ class Orchestrator:
             return await self._start_increase(session_id, session, message, prefix_text)
 
         if intent == "interview":
-            return self._start_interview(session_id, session, prefix_text)
+            return self._start_interview(session_id, session, prefix_text, message)
 
         if intent == "exchange_rate":
             return await self._start_exchange(session_id, session, message, prefix_text)
@@ -1217,18 +1259,89 @@ class Orchestrator:
     # ---------------------------------------------------------------- interview
 
     def _start_interview(
+        self,
+        session_id: str,
+        session: OrchestratorSession,
+        prefix: str = "",
+        message: str = "",
+    ) -> UnifiedChatResponse:
+        """Abre a entrevista, já aproveitando o que a frase de abertura disser.
+
+        "quero melhorar meu score, ganho 8 mil e sou CLT" traz duas das cinco respostas.
+        Perguntar de novo o que a pessoa acabou de dizer é o que faz um assistente
+        parecer um formulário.
+        """
+        session.current_agent = AgentType.INTERVIEW
+        session.collected_data = {}
+
+        draft = extract_profile(message)
+        draft.merge_into(session.collected_data)
+
+        abertura = (
+            f"{prefix}Ótimo! Vou te ajudar a atualizar seu perfil financeiro. Com essas "
+            "informações, podemos avaliar melhores opções de crédito para você."
+        )
+
+        aproveitado = self._describe_collected(session.collected_data)
+        if aproveitado:
+            abertura += f"\n\nJá anotei: {aproveitado}."
+
+        return self._ask_next_interview_field(session_id, session, prefix=f"{abertura}\n\n")
+
+    @staticmethod
+    def _describe_collected(data: dict) -> str:
+        """Lista em uma frase o que já foi entendido, para o cliente poder corrigir."""
+        partes = []
+        if data.get("renda_mensal") is not None:
+            partes.append(f"renda de {format_brl(data['renda_mensal'])}")
+        if data.get("tipo_emprego"):
+            partes.append(EMPREGO_LABEL.get(data["tipo_emprego"], data["tipo_emprego"]))
+        if data.get("despesas") is not None:
+            partes.append(f"despesas de {format_brl(data['despesas'])}")
+        if data.get("num_dependentes") is not None:
+            n = data["num_dependentes"]
+            partes.append("nenhum dependente" if n == 0 else f"{n} dependente{'s' if n > 1 else ''}")
+        if data.get("tem_dividas") is not None:
+            partes.append("com dívidas em aberto" if data["tem_dividas"] else "sem dívidas")
+
+        if not partes:
+            return ""
+        if len(partes) == 1:
+            return partes[0]
+        return ", ".join(partes[:-1]) + " e " + partes[-1]
+
+    def _ask_next_interview_field(
         self, session_id: str, session: OrchestratorSession, prefix: str = ""
     ) -> UnifiedChatResponse:
-        session.current_agent = AgentType.INTERVIEW
-        session.state = OrchestratorState.INTERVIEW_INCOME
-        session.collected_data = {}
+        """Pergunta só o que ainda falta; se nada falta, pede confirmação."""
+        data = session.collected_data
+
+        for field_name, state, pergunta in INTERVIEW_QUESTIONS:
+            if data.get(field_name) is None:
+                session.state = state
+                return self._build_response(
+                    session_id, session, f"{prefix}{pergunta}", authenticated=True
+                )
+
+        session.state = OrchestratorState.INTERVIEW_CONFIRM
         return self._build_response(
             session_id,
             session,
-            f"{prefix}Ótimo! Vou te ajudar a atualizar seu perfil financeiro. Com essas "
-            "informações, podemos avaliar melhores opções de crédito para você.\n\n"
-            "Para começar, qual é a sua renda mensal?",
+            f"{prefix}Confere se está tudo certo:\n\n"
+            f"{self._summarize_profile(data)}\n\n"
+            "Posso atualizar seu perfil com essas informações? (sim/não)",
             authenticated=True,
+        )
+
+    @staticmethod
+    def _summarize_profile(data: dict) -> str:
+        n = data.get("num_dependentes", 0)
+        return (
+            f"Renda mensal: {format_brl(data['renda_mensal'])}\n"
+            f"Tipo de trabalho: {EMPREGO_LABEL.get(data['tipo_emprego'], data['tipo_emprego'])}\n"
+            f"Despesas mensais: {format_brl(data['despesas'])}\n"
+            f"Dependentes: {n}\n"
+            f"Dívidas em aberto: {'sim' if data['tem_dividas'] else 'não'}"
         )
 
     async def _handle_interview_flow(
@@ -1245,96 +1358,117 @@ class Orchestrator:
                 return escape
             return self._flow_help_response(session_id, session, help_message)
 
+        if state == OrchestratorState.INTERVIEW_CONFIRM:
+            resposta = parse_boolean_response(message)
+
+            if resposta is False:
+                # Recomeça em vez de tentar adivinhar qual campo está errado: pedir para
+                # corrigir "aquele campo ali" por chat custa mais turnos do que refazer.
+                session.collected_data = {}
+                return self._ask_next_interview_field(
+                    session_id,
+                    session,
+                    prefix="Sem problema, vamos refazer.\n\n",
+                )
+
+            if resposta is not True:
+                return self._build_response(
+                    session_id,
+                    session,
+                    "Só preciso de um sim ou não para gravar. Confere:\n\n"
+                    f"{self._summarize_profile(data)}",
+                    authenticated=True,
+                )
+
+            return await self._submit_interview(session_id, session)
+
         if state in (OrchestratorState.INTERVIEW_FLOW, OrchestratorState.INTERVIEW_INCOME):
             value, help_message = self._parser.parse_income(message)
             if value is None:
                 return await not_understood(help_message)
             data["renda_mensal"] = value
-            session.state = OrchestratorState.INTERVIEW_EMPLOYMENT
-            return self._build_response(
-                session_id,
-                session,
-                "Qual seu tipo de trabalho? CLT, autônomo, MEI, servidor público ou desempregado?",
-                authenticated=True,
-            )
+            return self._absorb_and_continue(session_id, session, message)
 
         if state == OrchestratorState.INTERVIEW_EMPLOYMENT:
             emp_type, help_message = self._parser.parse_employment_type(message)
             if emp_type is None:
                 return await not_understood(help_message)
             data["tipo_emprego"] = emp_type
-            session.state = OrchestratorState.INTERVIEW_EXPENSES
-            return self._build_response(
-                session_id,
-                session,
-                "Qual o total das suas despesas mensais?",
-                authenticated=True,
-            )
+            return self._absorb_and_continue(session_id, session, message)
 
         if state == OrchestratorState.INTERVIEW_EXPENSES:
             value, help_message = self._parser.parse_expenses(message)
             if value is None:
                 return await not_understood(help_message)
             data["despesas"] = value
-            session.state = OrchestratorState.INTERVIEW_DEPENDENTS
-            return self._build_response(
-                session_id, session, "Quantos dependentes você tem?", authenticated=True
-            )
+            return self._absorb_and_continue(session_id, session, message)
 
         if state == OrchestratorState.INTERVIEW_DEPENDENTS:
             value, help_message = self._parser.parse_dependents(message)
             if value is None:
                 return await not_understood(help_message)
             data["num_dependentes"] = value
-            session.state = OrchestratorState.INTERVIEW_DEBTS
-            return self._build_response(
-                session_id,
-                session,
-                "Você tem alguma dívida em aberto? (sim/não)",
-                authenticated=True,
-            )
+            return self._absorb_and_continue(session_id, session, message)
 
         if state == OrchestratorState.INTERVIEW_DEBTS:
             has_debts, help_message = self._parser.parse_has_debts(message)
             if has_debts is None:
                 return await not_understood(help_message)
             data["tem_dividas"] = has_debts
-
-            interview_request = InterviewRequest(
-                renda_mensal=data["renda_mensal"],
-                tipo_emprego=data["tipo_emprego"],
-                despesas=data["despesas"],
-                num_dependentes=data["num_dependentes"],
-                tem_dividas=data["tem_dividas"],
-            )
-            result = await self._interview_agent.submit(session.cpf, interview_request)
-
-            session.reset_flow()
-
-            redirect = RedirectAction(
-                should_redirect=True,
-                target_agent="credit",
-                reason="interview_completed",
-                suggested_action="check_new_limit",
-            )
-            session.pending_redirect = redirect
-
-            return self._build_response(
-                session_id,
-                session,
-                "Entrevista concluída!\n\n"
-                f"Score anterior: {result.previous_score}\n"
-                f"Novo score: {result.new_score}\n"
-                f"{self._describe_score_change(result.previous_score, result.new_score)}\n\n"
-                f"{result.recommendation}\n\n"
-                "Deseja consultar seu novo limite de crédito?",
-                authenticated=True,
-                redirect=redirect,
-            )
+            return self._absorb_and_continue(session_id, session, message)
 
         session.state = OrchestratorState.INTERVIEW_INCOME
         return self._build_response(
             session_id, session, "Vamos continuar. Qual sua renda mensal?", authenticated=True
+        )
+
+    def _absorb_and_continue(
+        self, session_id: str, session: OrchestratorSession, message: str
+    ) -> UnifiedChatResponse:
+        """Aproveita o resto da frase e pergunta só o que ainda falta.
+
+        A resposta a "qual sua renda?" costuma trazer mais do que a renda
+        ("8 mil, sou CLT e tenho dois filhos"). O campo perguntado já foi gravado pelo
+        parser específico; aqui recolhemos o excedente.
+        """
+        extra = extract_profile(message)
+        extra.merge_into(session.collected_data)
+        return self._ask_next_interview_field(session_id, session)
+
+    async def _submit_interview(
+        self, session_id: str, session: OrchestratorSession
+    ) -> UnifiedChatResponse:
+        data = session.collected_data
+        interview_request = InterviewRequest(
+            renda_mensal=data["renda_mensal"],
+            tipo_emprego=data["tipo_emprego"],
+            despesas=data["despesas"],
+            num_dependentes=data["num_dependentes"],
+            tem_dividas=data["tem_dividas"],
+        )
+        result = await self._interview_agent.submit(session.cpf, interview_request)
+
+        session.reset_flow()
+
+        redirect = RedirectAction(
+            should_redirect=True,
+            target_agent="credit",
+            reason="interview_completed",
+            suggested_action="check_new_limit",
+        )
+        session.pending_redirect = redirect
+
+        return self._build_response(
+            session_id,
+            session,
+            "Entrevista concluída!\n\n"
+            f"Score anterior: {result.previous_score}\n"
+            f"Novo score: {result.new_score}\n"
+            f"{self._describe_score_change(result.previous_score, result.new_score)}\n\n"
+            f"{result.recommendation}\n\n"
+            "Deseja consultar seu novo limite de crédito?",
+            authenticated=True,
+            redirect=redirect,
         )
 
     # ---------------------------------------------------------------- exchange

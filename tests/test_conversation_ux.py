@@ -208,6 +208,12 @@ class TestFlowEscapes:
         await say(client, session_id, "3k")
         await say(client, session_id, "nenhum")
         data = await say(client, session_id, "não tenho dívidas, tudo pago")
+
+        # Coleta completa: o fluxo mostra o resumo e so grava depois do aceite.
+        assert data["state"] == "interview_confirm"
+        assert "dívidas em aberto: não" in data["message"].lower()
+
+        data = await say(client, session_id, "sim")
         assert "score" in data["message"].lower()
         assert data["redirect_suggestion"] is not None
 
