@@ -9,7 +9,7 @@ python-dotenv>=1.0.0
 # Persistencia: SQLite local (aiosqlite) e Postgres em producao (asyncpg).
 sqlalchemy[asyncio]>=2.0.0
 aiosqlite>=0.19.0
-alembic>=1.13.0
+alembic>=1.20.0
 
 # Rate limit por IP em /unified/chat, /triage/authenticate e /signup.
 slowapi>=0.1.9
