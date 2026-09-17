@@ -1,19 +1,26 @@
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-pydantic[email]>=2.5.0
-pydantic-settings>=2.1.0
-python-jose[cryptography]>=3.3.0
-httpx>=0.26.0
-python-dotenv>=1.0.0
+# Versoes exatas: producao roda o que o CI testou, nao o que for mais novo no dia.
+#
+# Com `>=` sem teto, o build do container resolvia langchain 1.2 -> 1.4 e openai 2 -> 3,
+# um conjunto que nenhum teste exercitou. E a definicao de "funciona na minha maquina".
+# O Dependabot abre PR para subir cada pino, e o CI decide se sobe.
+
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+pydantic[email]==2.12.5
+pydantic-settings==2.12.0
+python-jose[cryptography]==3.5.0
+httpx==0.28.1
+python-dotenv==1.2.1
 
 # Persistencia: SQLite local (aiosqlite) e Postgres em producao (asyncpg).
-sqlalchemy[asyncio]>=2.0.0
-aiosqlite>=0.19.0
-alembic>=1.13.0
+sqlalchemy[asyncio]==2.0.54
+aiosqlite==0.22.1
+alembic==1.20.0
 
 # Rate limit por IP em /unified/chat, /triage/authenticate e /signup.
-slowapi>=0.1.9
+slowapi==0.1.10
 
-langchain>=0.0.340
-langchain-openai>=0.0.2
-langchain-anthropic>=0.1.0
+# langchain 1.x: a API mudou entre 0.x e 1.x, e langchain-openai 1.6 puxa openai 3.x.
+langchain==1.2.3
+langchain-openai==1.1.7
+langchain-anthropic==1.3.1
