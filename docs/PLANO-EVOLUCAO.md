@@ -1,5 +1,43 @@
 # Plano de evolução: deixar o app pronto para qualquer pessoa testar
 
+## Status (execução de 17/09/2026)
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Modo demonstração com personas | **feito** — e ampliado com auto-cadastro |
+| 2 | Validação de CPF e máscaras | **feito** — 19 CPFs da base corrigidos |
+| 3 | Bloqueio com saída | **feito** — contagem por CPF compartilhada |
+| 4 | Cold start do Render | **documentado** — falta criar o monitor externo (configuração fora do repo) |
+| 5 | README como landing page | **feito** — capturas, Mermaid, teste em um minuto |
+| 6 | CI | **feito** — ruff, pytest 80%, eval 90%, smoke de seed; front com lint/tsc/vitest/build |
+| 7 | Persistência | **feito** — SQLAlchemy async, repositórios, seed; **sem Alembic** (ver abaixo) |
+| 8 | Sessões fora do processo | **parcial** — `GET /unified/session/{id}` e retomada no front prontos; `RedisSessionStore` não feito |
+| 9 | Regras de negócio honestas | **feito** — três desfechos reais, `available_limit` removido |
+| 10 | Segurança e abuso | **feito** — rate limit, cabeçalhos, guarda de prompt injection |
+| 11 | Observabilidade | **feito** — request id, log JSON, contadores em `/health` |
+| 12 | Avaliação de intenção | **feito** — 102 frases, 91,2%; **saída estruturada do LLM não feita** |
+| 13 | Entrevista conversacional | **feito** — extração por rótulo e confirmação |
+| 14 | Testes de front | **feito** — 24 Vitest, 5 Playwright com API mockada |
+| 15 | Higiene | **feito** — v2 apagado, integração movida, pre-commit, Dependabot, `.env.example` |
+
+### O que ficou de fora, e por quê
+
+- **Alembic (item 7.4)**: o schema é criado por `create_all` e o banco é recriado pelo
+  seed a cada deploy. Migração só passa a fazer sentido quando houver um Postgres com
+  dados que precisam sobreviver ao deploy seguinte — antes disso, uma migração inicial
+  é cerimônia sem função.
+- **RedisSessionStore (item 8.1)**: a sessão continua em memória. Só importa com mais de
+  uma instância, e a demo roda em uma. A interface para trocar já existe; o `GET` de
+  retomada, que era o ganho visível para o usuário, foi entregue.
+- **Saída estruturada no classificador (item 12.3)**: o parse de texto está coberto pela
+  avaliação e acerta 91,2% sem o LLM. Trocar por `with_structured_output` muda o caminho
+  que só roda em 13% das mensagens.
+- **Monitor de cold start (item 4.1)**: é cadastro em serviço externo, não código.
+
+Detalhes de cada entrega estão nas mensagens de commit.
+
+---
+
 Objetivo: fechar os pontos que um entrevistador sênior levantaria e tornar a demo utilizável por um
 recrutador sem instruções. Escrito para ser executado por outra sessão (humana ou de agente):
 cada item diz o que mudar, onde, como validar e o que já foi verificado no repositório.
