@@ -11,7 +11,7 @@ O **Agente Bancario Inteligente** é um sistema de atendimento digital que utili
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Cliente (Frontend)                        │
-│                    Streamlit / API Consumer                       │
+│                 Next.js (chat) / API Consumer                     │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
@@ -92,13 +92,17 @@ python app.py
 A API estara disponivel em: `http://localhost:8000`
 Documentacao Swagger: `http://localhost:8000/docs`
 
-### Executando o Frontend (Streamlit)
+### Executando o Frontend (Next.js)
+
+O front-end fica no repositorio `IA-Agent-Tech-For-Humans-Front-end`:
 
 ```bash
-streamlit run src/ui/streamlit_app.py
+npm install
+cp .env.example .env.local   # BACKEND_URL=http://localhost:8000
+npm run dev
 ```
 
-Interface disponivel em: `http://localhost:8501`
+Interface disponivel em: `http://localhost:3000`
 
 ### Usando Docker
 
@@ -246,9 +250,7 @@ score_final = clamp(soma_componentes, 0, 1000)
 
 | Metodo | Rota | Descricao |
 |--------|------|-----------|
-| `GET` | `/health` | Health check do servidor |
-| `POST` | `/chat/init` | Inicializa sessao de chat |
-| `POST` | `/chat` | Envia mensagem para o chat |
+| `GET` | `/health` | Health check (versao e se o LLM esta ativo) |
 | `POST` | `/triage/authenticate` | Autentica usuario |
 | `POST` | `/unified/init` | Inicializa orquestrador unificado |
 | `POST` | `/unified/chat` | Envia mensagem para orquestrador |
@@ -567,8 +569,7 @@ IA-Agent-Tech-For-Humans-Back-end/
 │   │   ├── triagem.py       # Agente autenticacao
 │   │   ├── credito.py       # Agente credito
 │   │   ├── entrevista.py    # Agente entrevista
-│   │   ├── cambio.py        # Agente cambio
-│   │   └── optimized_chat.py # Chat otimizado
+│   │   └── cambio.py        # Agente cambio
 │   │
 │   ├── services/
 │   │   ├── auth_service.py  # JWT
@@ -585,7 +586,6 @@ IA-Agent-Tech-For-Humans-Back-end/
 │   │   ├── logging_config.py # Logs
 │   │   ├── formatting.py    # Formatacao R$ padrao brasileiro
 │   │   ├── text_normalizer.py # Normalizacao (palavra inteira)
-│   │   ├── token_monitor.py # Monitor tokens
 │   │   └── value_extractor.py # Extratores
 │   │
 │   └── data/
@@ -601,9 +601,9 @@ IA-Agent-Tech-For-Humans-Back-end/
     ├── test_cambio.py
     ├── test_orchestrator.py
     ├── test_conversation_ux.py  # Cenarios de conversa (intencao antes do login, cambio direto, escapes)
+    ├── test_conversation_improvements.py  # Oferta respondida com valor, sessao expirada, resiliencia
     ├── test_intent_rules.py     # Classificacao por regras e fronteira de palavra
-    ├── test_integration.py
-    └── test_restrictions.py
+    └── test_integration.py
 ```
 
 ---

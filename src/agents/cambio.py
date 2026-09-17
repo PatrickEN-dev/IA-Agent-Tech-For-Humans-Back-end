@@ -5,6 +5,7 @@ import httpx
 
 from src.config import get_settings
 from src.models.schemas import ExchangeRateResponse
+from src.utils.formatting import format_rate
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,11 @@ class ExchangeAgent:
                 timeout=httpx.Timeout(self._settings.exchange_api_timeout_seconds)
             )
         return self._client
+
+    async def aclose(self) -> None:
+        """Fecha o cliente HTTP compartilhado (chamado no shutdown da API)."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
 
     async def get_rate(
         self, from_currency: str, to_currency: str
@@ -122,4 +128,4 @@ class ExchangeAgent:
             source_text = "(cotação recente)"
         else:
             source_text = "(cotação indicativa)"
-        return f"1 {from_currency} = {rate:.4f} {to_currency} {source_text}"
+        return f"1 {from_currency} = {format_rate(rate)} {to_currency} {source_text}"

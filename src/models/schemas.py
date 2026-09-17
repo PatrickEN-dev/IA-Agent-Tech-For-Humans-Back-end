@@ -3,6 +3,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Teto absoluto do payload; o limite "amigavel" (max_message_length) e tratado no orquestrador
+# com uma resposta de chat, nao com erro 422.
+MAX_MESSAGE_PAYLOAD = 10_000
+
 
 class AuthRequest(BaseModel):
     cpf: str = Field(..., min_length=11, max_length=14)
@@ -61,26 +65,6 @@ class ExchangeRateResponse(BaseModel):
     message: str
 
 
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-
-
-class ChatRequest(BaseModel):
-    session_id: str | None = None
-    message: str
-    conversation_history: list[ChatMessage] = []
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    message: str
-    state: str
-    authenticated: bool = False
-    token: str | None = None
-    data: dict | None = None
-
-
 class RedirectAction(BaseModel):
     should_redirect: bool = False
     target_agent: str | None = None
@@ -88,24 +72,9 @@ class RedirectAction(BaseModel):
     suggested_action: str | None = None
 
 
-class OrchestratorRequest(BaseModel):
-    session_id: str
-    intent: str
-    data: dict | None = None
-
-
-class OrchestratorResponse(BaseModel):
-    session_id: str
-    agent_used: str
-    result: dict
-    redirect: RedirectAction | None = None
-    message: str
-    next_steps: list[str] = []
-
-
 class UnifiedChatRequest(BaseModel):
-    session_id: str | None = None
-    message: str
+    session_id: str | None = Field(default=None, max_length=64)
+    message: str = Field(..., max_length=MAX_MESSAGE_PAYLOAD)
 
 
 class UnifiedChatResponse(BaseModel):
@@ -114,6 +83,14 @@ class UnifiedChatResponse(BaseModel):
     state: str
     authenticated: bool = False
     token: str | None = None
+    # Primeiro nome do cliente autenticado, para o front personalizar a interface
+    user_name: str | None = None
     current_agent: str
     available_actions: list[str] = []
     redirect_suggestion: RedirectAction | None = None
+
+
+class HealthResponse(BaseModel):
+    status: Literal["healthy"]
+    version: str
+    llm_enabled: bool

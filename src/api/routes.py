@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
 from src.agents.cambio import ExchangeAgent
-from src.agents.optimized_chat import OptimizedChatAgent
 from src.agents.credito import CreditAgent
 from src.agents.entrevista import InterviewAgent
 from src.agents.orchestrator import Orchestrator
@@ -9,8 +8,6 @@ from src.agents.triagem import TriageAgent
 from src.models.schemas import (
     AuthRequest,
     AuthResponse,
-    ChatRequest,
-    ChatResponse,
     CreditLimitResponse,
     ExchangeRateResponse,
     InterviewRequest,
@@ -20,27 +17,32 @@ from src.models.schemas import (
     UnifiedChatRequest,
     UnifiedChatResponse,
 )
-from src.services.auth_service import get_current_cpf
+from src.services.auth_service import AuthService, get_current_cpf
+from src.services.csv_service import CSVService
+from src.services.llm_service import LLMService
+from src.services.score_service import ScoreService
 
 router = APIRouter()
 
-triage_agent = TriageAgent()
-credit_agent = CreditAgent()
-interview_agent = InterviewAgent()
+# Uma instancia de cada servico/agente para todo o processo: o orquestrador e os
+# endpoints diretos compartilham cache de LLM, cliente HTTP de cambio e contadores.
+csv_service = CSVService()
+auth_service = AuthService()
+llm_service = LLMService()
+score_service = ScoreService(csv_service)
+
+triage_agent = TriageAgent(csv_service, auth_service, llm_service)
+credit_agent = CreditAgent(csv_service, score_service)
+interview_agent = InterviewAgent(csv_service, score_service)
 exchange_agent = ExchangeAgent()
-chat_agent = OptimizedChatAgent()
-orchestrator = Orchestrator()
-
-
-@router.post("/chat/init", response_model=ChatResponse)
-async def init_chat() -> ChatResponse:
-    """Inicializa uma nova sessão de chat com mensagem de boas-vindas"""
-    return await chat_agent.init_session()
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    return await chat_agent.process_message(request)
+orchestrator = Orchestrator(
+    credit_agent=credit_agent,
+    interview_agent=interview_agent,
+    exchange_agent=exchange_agent,
+    csv_service=csv_service,
+    auth_service=auth_service,
+    llm_service=llm_service,
+)
 
 
 @router.post("/triage/authenticate", response_model=AuthResponse)

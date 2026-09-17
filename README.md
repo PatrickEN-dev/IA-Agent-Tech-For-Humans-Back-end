@@ -1,265 +1,164 @@
-# Banco Ágil - Sistema Bancário Digital
+# Banco Ágil - API do Assistente Bancário
 
-Sistema de atendimento bancário com interface web e API backend.
+Back-end (FastAPI) do assistente virtual do Banco Ágil: um orquestrador de conversa que
+autentica o cliente, consulta e solicita aumento de limite, cota moedas e conduz uma
+entrevista financeira para atualizar o score.
+
+- Front-end (Next.js): repositório `IA-Agent-Tech-For-Humans-Front-end`
+- Guia rápido para avaliadores: [README-RECRUTADOR.md](README-RECRUTADOR.md)
+- Arquitetura da conversa (regras + LLM): [docs/arquitetura-hibrida-v2.md](docs/arquitetura-hibrida-v2.md)
+- Documentação técnica completa: [docs/DOCUMENTACAO-TECNICA.md](docs/DOCUMENTACAO-TECNICA.md)
 
 ## Funcionalidades
 
-- Autenticação por CPF e data de nascimento
+- Autenticação por CPF e data de nascimento (3 tentativas, bloqueio com expiração)
 - Consulta de limite de crédito
-- Solicitação de aumento de limite
-- Cotação de moedas
+- Solicitação de aumento de limite (com oferta de entrevista quando negada)
+- Cotação de moedas (API externa com cache e taxas de contingência)
 - Entrevista para atualização de score
+- Conversa em linguagem natural: intenção antes do login, valores na própria frase,
+  saída de fluxos com "cancelar", aviso de sessão expirada, tolerância a erros
 
-## Execução
+## Requisitos
 
-### Backend (API)
+- Python 3.11+
+- pip
+
+## Instalação
 
 ```bash
-python app.py
+git clone <url-do-repositorio>
+cd IA-Agent-Tech-For-Humans-Back-end
+
+python -m venv venv
+.\venv\Scripts\activate        # Windows
+# source venv/bin/activate     # Linux/Mac
+
+pip install -r requirements-dev.txt   # runtime + pytest
+cp .env.example .env                  # os valores padrão funcionam sem LLM
 ```
 
-### Frontend (Streamlit)
+## Executando
 
 ```bash
-streamlit run src/ui/streamlit_app_agent.py
+python app.py            # http://localhost:8000  (Swagger em /docs)
+```
+
+No Windows, `start_system.bat` faz o mesmo ativando o venv.
+
+### Docker
+
+```bash
+docker build -t agente-bancario .
+docker run -p 8000:8000 --env-file .env agente-bancario
+# ou: docker-compose up -d
 ```
 
 ## Endpoints
 
-- `POST /unified/init` / `POST /unified/chat` - Chat unificado (orquestrador)
-- `POST /triage/authenticate` - Autenticação
-- `GET /credit/limit` - Consulta limite
-- `POST /credit/request_increase` - Solicitação de aumento
-- `GET /exchange` - Cotação de moedas
-- `POST /interview/submit` - Entrevista financeira
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/health` | Status, versão e se o LLM está ativo |
+| `POST` | `/api/unified/init` | Abre uma sessão de chat (mensagem de boas-vindas) |
+| `POST` | `/api/unified/chat` | Envia uma mensagem para o orquestrador |
+| `POST` | `/api/triage/authenticate` | Autenticação direta (retorna JWT) |
+| `GET` | `/api/credit/limit` | Consulta limite (JWT) |
+| `POST` | `/api/credit/request_increase` | Solicita aumento (JWT) |
+| `POST` | `/api/interview/submit` | Envia entrevista financeira (JWT) |
+| `GET` | `/api/exchange?from=USD&to=BRL` | Cotação (JWT) |
+
+O front-end usa apenas `/unified/*`; os demais endpoints expõem os agentes individualmente.
+
+Resposta do chat unificado:
+
+```json
+{
+  "session_id": "…",
+  "message": "texto para o cliente",
+  "state": "authenticated | collecting_cpf | credit_increase_flow | interview_income | …",
+  "authenticated": true,
+  "token": "jwt ou null",
+  "current_agent": "triage | credit | interview | exchange",
+  "available_actions": ["consultar_limite", "solicitar_aumento", "cotacao_cambio", "atualizar_perfil"],
+  "redirect_suggestion": { "should_redirect": true, "target_agent": "credit_increase" }
+}
+```
+
+`available_actions` inclui `cancelar` enquanto um fluxo de coleta está aberto, e
+`redirect_suggestion` indica que a última mensagem é uma pergunta de sim/não.
 
 ## Dados de Teste
 
-| CPF         | Nome                     | Data Nascimento | Score |
-| ----------- | ------------------------ | --------------- | ----- |
-| 52998224725 | Maria Helena Santos      | 15/05/1990      | 315   |
-| 71893456209 | João Pedro Oliveira      | 22/03/1985      | 620   |
-| 89156734502 | Ana Carolina Lima        | 08/11/1992      | 609   |
-| 34567891234 | Carlos Eduardo Souza     | 30/07/1978      | 450   |
-| 89123456789 | Patricia Souza Nascimento| 14/06/1976      | 920   |
+| CPF         | Nome                      | Data Nascimento | Score |
+| ----------- | ------------------------- | --------------- | ----- |
+| 52998224725 | Maria Helena Santos       | 15/05/1990      | 315   |
+| 71893456209 | João Pedro Oliveira       | 22/03/1985      | 620   |
+| 89156734502 | Ana Carolina Lima         | 08/11/1992      | 609   |
+| 34567891234 | Carlos Eduardo Souza      | 30/07/1978      | 450   |
+| 89123456789 | Patricia Souza Nascimento | 14/06/1976      | 920   |
 
-Lista completa em `src/data/clientes.csv`. Os testes automatizados usam uma base propria e isolada (veja `tests/conftest.py`).
+Lista completa em `src/data/clientes.csv`. Os testes automatizados usam uma base própria e
+isolada (veja `tests/conftest.py`).
 
-- Python 3.11+
-- pip (gerenciador de pacotes)
-
-### Instalacao
+## Testes
 
 ```bash
-# 1. Clone o repositorio
-git clone <url-do-repositorio>
-cd IA-Agent-Tech-For-Humans-Back-end
-
-# 2. Crie um ambiente virtual (recomendado)
-python -m venv venv
-
-# Windows
-.\venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-
-# 3. Instale as dependencias
-pip install -r requirements.txt
-
-# 4. Configure o ambiente
-cp .env.example .env
-# Edite o .env se necessario (valores padrao funcionam)
-```
-
-### Executando a Interface (Streamlit)
-
-```bash
-# Execute a interface de chat
-streamlit run src/ui/streamlit_app.py
-```
-
-A interface estara disponivel em: **http://localhost:8501**
-
-### Executando a API (Backend)
-
-```bash
-# Execute o servidor FastAPI
-python app.py
-```
-
-A API estara disponivel em: **http://localhost:8000**
-Documentacao automatica: **http://localhost:8000/docs**
-
-### Usando Docker
-
-```bash
-# Build da imagem
-docker build -t agente-bancario .
-
-# Executar container
-docker run -p 8000:8000 agente-bancario
-```
-
-## Testando a Aplicacao
-
-### Clientes de Teste
-
-| CPF         | Nome                     | Data Nascimento | Score |
-| ----------- | ------------------------ | --------------- | ----- |
-| 52998224725 | Maria Helena Santos      | 15/05/1990      | 315   |
-| 71893456209 | João Pedro Oliveira      | 22/03/1985      | 620   |
-| 89156734502 | Ana Carolina Lima        | 08/11/1992      | 609   |
-| 34567891234 | Carlos Eduardo Souza     | 30/07/1978      | 450   |
-| 89123456789 | Patricia Souza Nascimento| 14/06/1976      | 920   |
-
-Lista completa em `src/data/clientes.csv`. Os testes automatizados usam uma base propria e isolada (veja `tests/conftest.py`).
-
-### Exemplo de Uso na Interface
-
-1. Acesse http://localhost:8501
-2. Digite o CPF: `52998224725`
-3. Digite a data de nascimento: `15/05/1990`
-4. Apos autenticacao, escolha uma opcao:
-   - `1` - Consultar limite de credito
-   - `2` - Solicitar aumento de limite
-   - `3` - Consultar cotacao de moedas
-   - `4` - Encerrar atendimento
-
-### Executando Testes Automatizados
-
-```bash
-# Rodar todos os testes
-pytest
-
-# Com cobertura de codigo
+pytest                          # suíte completa (sem chamadas de LLM)
 pytest --cov=src --cov-report=html
-
-# Testes especificos
-pytest tests/test_triagem.py -v
-pytest tests/test_credito.py -v
-pytest tests/test_entrevista.py -v
-pytest tests/test_cambio.py -v
+pytest tests/test_conversation_ux.py -v
 ```
 
-## Desafios Enfrentados e Solucoes
+## Variáveis de Ambiente
 
-### 1. Sincronia entre Streamlit e AsyncIO
-
-**Desafio**: Streamlit e preciso chamar funcoes async do backend.
-**Solucao**: Uso de `asyncio.run()` para executar coroutines no contexto sincrono do Streamlit.
-
-### 2. Persistencia Thread-Safe em CSV
-
-**Desafio**: Multiplas requisicoes podem modificar CSVs simultaneamente.
-**Solucao**: Implementacao de `FileLock` para garantir acesso exclusivo aos arquivos.
-
-### 3. Deteccao de Intencao sem LLM
-
-**Desafio**: Sistema precisa funcionar mesmo sem API de LLM.
-**Solucao**: Fallback para classificacao baseada em keywords quando LLM indisponivel.
-
-### 4. Validacao de Dados de Entrada
-
-**Desafio**: CPF pode vir com ou sem formatacao.
-**Solucao**: Normalizacao automatica removendo pontos e tracos.
-
-### 5. Transicao Suave entre Agentes
-
-**Desafio**: Usuario nao deve perceber troca de agentes.
-**Solucao**: Maquina de estados no Streamlit com transicoes implicitas.
-
-## Escolhas Tecnicas e Justificativas
-
-### FastAPI
-
-- Framework moderno e rapido para APIs Python
-- Suporte nativo a async/await
-- Documentacao automatica via OpenAPI
-- Validacao de dados com Pydantic
-
-### Streamlit
-
-- Simplicidade para criar interfaces de chat
-- Gerenciamento de estado de sessao
-- Atualizacao reativa da interface
-
-### CSV para Persistencia
-
-- Simplicidade para MVP
-- Facilidade de inspecao e debug
-- Atende requisitos do desafio (clientes.csv, score_limite.csv)
-
-### JWT para Autenticacao
-
-- Padrao da industria
-- Stateless (nao requer sessao no servidor)
-- Expiracao configuravel
-
-### LangChain (Opcional)
-
-- Facilita integracao com diferentes LLMs
-- Fallback para regras quando indisponivel
-- Configuravel via variavel de ambiente
+| Variável                 | Descrição                                        | Padrão                                     |
+| ------------------------ | ------------------------------------------------ | ------------------------------------------ |
+| `JWT_SECRET_KEY`         | Chave secreta para JWT (avisa no log se for a padrão) | dev-secret-key...                     |
+| `JWT_EXPIRATION_MINUTES` | Expiração do token                               | 15                                         |
+| `USE_LANGCHAIN`          | Ativa classificação/humanização via LLM          | false                                      |
+| `LLM_PROVIDER`           | `openai` ou `anthropic`                          | openai                                     |
+| `OPENAI_API_KEY`         | Chave OpenAI                                     | -                                          |
+| `ANTHROPIC_API_KEY`      | Chave Anthropic                                  | -                                          |
+| `EXCHANGE_API_URL`       | URL da API de câmbio                             | https://api.exchangerate-api.com/v4/latest |
+| `DATA_DIR`               | Diretório dos CSVs                               | src/data                                   |
+| `LOG_LEVEL`              | Nível de log                                     | INFO                                       |
+| `MAX_AUTH_ATTEMPTS`      | Tentativas de autenticação                       | 3                                          |
+| `AUTH_LOCKOUT_MINUTES`   | Janela de bloqueio por CPF em `/triage`          | 15                                         |
+| `SESSION_TTL_MINUTES`    | Inatividade até a sessão de chat expirar         | 30                                         |
+| `MAX_MESSAGE_LENGTH`     | Tamanho máximo de mensagem processada            | 2000                                       |
 
 ## Estrutura do Projeto
 
 ```
-IA-Agent-Tech-For-Humans-Back-end/
-├── app.py                          # Ponto de entrada da API
-├── requirements.txt                # Dependencias Python
-├── pyproject.toml                  # Configuracao do projeto
-├── Dockerfile                      # Container Docker
-├── .env.example                    # Template de variaveis de ambiente
+├── app.py                       # Ponto de entrada (uvicorn)
+├── requirements.txt             # Dependências de runtime
+├── requirements-dev.txt         # + pytest
+├── Dockerfile / docker-compose.yml / render.yaml
+├── docs/                        # Arquitetura, documentação técnica, histórico
 ├── src/
-│   ├── main.py                     # Configuracao FastAPI
-│   ├── config.py                   # Gerenciamento de configuracoes
-│   ├── api/
-│   │   └── routes.py               # Endpoints da API
+│   ├── main.py                  # App FastAPI, lifespan, handler global de erros, /health
+│   ├── config.py                # Settings (pydantic-settings)
+│   ├── api/routes.py            # Endpoints; instancia e injeta agentes/serviços
 │   ├── agents/
-│   │   ├── triagem.py              # Agente de Triagem
-│   │   ├── credito.py              # Agente de Credito
-│   │   ├── entrevista.py           # Agente de Entrevista
-│   │   └── cambio.py               # Agente de Cambio
-│   ├── services/
-│   │   ├── auth_service.py         # Servico de autenticacao JWT
-│   │   ├── csv_service.py          # Persistencia em CSV
-│   │   ├── llm_service.py          # Integracao com LLM
-│   │   └── score_service.py        # Calculo de score
-│   ├── models/
-│   │   ├── domain.py               # Modelos de dominio
-│   │   └── schemas.py              # Schemas Pydantic
-│   ├── utils/
-│   │   ├── exceptions.py           # Excecoes customizadas
-│   │   └── logging_config.py       # Configuracao de logs
-│   ├── ui/
-│   │   └── streamlit_app.py        # Interface Streamlit
-│   └── data/
-│       ├── clientes.csv            # Base de clientes
-│       ├── score_limite.csv        # Tabela score x limite
-│       └── solicitacoes_aumento_limite.csv  # Solicitacoes registradas
+│   │   ├── orchestrator.py      # Máquina de estados da conversa
+│   │   ├── triagem.py           # Autenticação com limite de tentativas
+│   │   ├── credito.py           # Limite e aumento
+│   │   ├── entrevista.py        # Entrevista financeira
+│   │   └── cambio.py            # Cotações
+│   ├── services/                # auth (JWT), csv, llm (regras + LangChain), score
+│   ├── models/                  # Entidades e schemas Pydantic
+│   ├── utils/                   # Normalização de texto, extratores, formatação, exceções
+│   └── data/                    # clientes.csv, score_limite.csv, solicitacoes_aumento_limite.csv
 └── tests/
-    ├── conftest.py                 # Fixtures de teste
-    ├── test_triagem.py             # Testes do agente de triagem
-    ├── test_credito.py             # Testes do agente de credito
-    ├── test_entrevista.py          # Testes do agente de entrevista
-    └── test_cambio.py              # Testes do agente de cambio
 ```
 
-## Variaveis de Ambiente
+## Decisões Técnicas
 
-| Variavel                 | Descricao                           | Padrao                                     |
-| ------------------------ | ----------------------------------- | ------------------------------------------ |
-| `JWT_SECRET_KEY`         | Chave secreta para JWT              | dev-secret-key...                          |
-| `JWT_EXPIRATION_MINUTES` | Tempo de expiracao do token         | 15                                         |
-| `USE_LANGCHAIN`          | Ativar deteccao de intencao via LLM | false                                      |
-| `LLM_PROVIDER`           | Provedor LLM (openai/anthropic)     | openai                                     |
-| `OPENAI_API_KEY`         | Chave API OpenAI                    | -                                          |
-| `ANTHROPIC_API_KEY`      | Chave API Anthropic                 | -                                          |
-| `EXCHANGE_API_URL`       | URL da API de cambio                | https://api.exchangerate-api.com/v4/latest |
-| `DATA_DIR`               | Diretorio dos arquivos CSV          | src/data                                   |
-| `LOG_LEVEL`              | Nivel de log                        | INFO                                       |
+- **Regras primeiro, LLM depois**: palavras-chave resolvem a maioria das mensagens em 0 ms;
+  o LLM só classifica frases ambíguas e reescreve o tom, nunca decide ações nem acessa dados.
+- **Tudo funciona sem LLM**: com `USE_LANGCHAIN=false` o sistema usa regras e templates.
+- **CSV com FileLock**: persistência simples e inspecionável, suficiente para o MVP.
+- **JWT stateless** para os endpoints diretos; sessões de chat em memória com TTL.
 
-## Licenca
+## Licença
 
 MIT License

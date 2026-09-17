@@ -30,8 +30,8 @@ PESO_DIVIDAS: dict[bool, int] = {
 
 
 class ScoreService:
-    def __init__(self) -> None:
-        self._csv_service = CSVService()
+    def __init__(self, csv_service: CSVService | None = None) -> None:
+        self._csv_service = csv_service or CSVService()
 
     async def get_limit_for_score(self, score: int) -> float:
         limits = await self._csv_service.read_score_limits()

@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_JWT_SECRET = "dev-secret-key-change-in-production"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -12,7 +14,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    jwt_secret_key: str = "dev-secret-key-change-in-production"
+    jwt_secret_key: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 15
 
@@ -40,8 +42,12 @@ class Settings(BaseSettings):
     data_dir: Path = Path("src/data")
 
     max_auth_attempts: int = 3
+    # Janela de bloqueio por CPF no endpoint /triage/authenticate apos esgotar as tentativas.
+    auth_lockout_minutes: int = 15
     session_ttl_minutes: int = 30
     max_conversation_history: int = 20
+    # Mensagens maiores que isso nao sao processadas (evita custo de LLM e historico inflado).
+    max_message_length: int = 2000
 
     @property
     def clients_csv_path(self) -> Path:
@@ -61,6 +67,12 @@ class Settings(BaseSettings):
         elif self.llm_provider == "anthropic":
             return bool(self.anthropic_api_key)
         return False
+
+    def llm_enabled(self) -> bool:
+        return self.use_langchain and self.has_llm_api_key()
+
+    def uses_default_jwt_secret(self) -> bool:
+        return self.jwt_secret_key == DEFAULT_JWT_SECRET
 
 
 @lru_cache

@@ -8,16 +8,23 @@ from src.models.schemas import (
 )
 from src.services.csv_service import CSVService
 from src.services.score_service import ScoreService
-from src.utils.formatting import format_brl
 from src.utils.exceptions import ClientNotFoundError
+from src.utils.formatting import format_brl
 
 logger = logging.getLogger(__name__)
 
+# Parcela do limite considerada "disponivel" no MVP (nao ha extrato de compras).
+AVAILABLE_LIMIT_RATIO = 0.8
+
 
 class CreditAgent:
-    def __init__(self) -> None:
-        self._csv_service = CSVService()
-        self._score_service = ScoreService()
+    def __init__(
+        self,
+        csv_service: CSVService | None = None,
+        score_service: ScoreService | None = None,
+    ) -> None:
+        self._csv_service = csv_service or CSVService()
+        self._score_service = score_service or ScoreService(self._csv_service)
 
     async def get_limit(self, cpf: str) -> CreditLimitResponse:
         client = await self._csv_service.get_client_by_cpf(cpf)
@@ -26,7 +33,7 @@ class CreditAgent:
 
         score = client.score
         current_limit = await self._score_service.get_limit_for_score(score)
-        available_limit = current_limit * 0.8
+        available_limit = current_limit * AVAILABLE_LIMIT_RATIO
 
         logger.info(f"Retrieved credit limit for CPF: {cpf[:3]}***")
 

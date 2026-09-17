@@ -9,9 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class InterviewAgent:
-    def __init__(self) -> None:
-        self._csv_service = CSVService()
-        self._score_service = ScoreService()
+    def __init__(
+        self,
+        csv_service: CSVService | None = None,
+        score_service: ScoreService | None = None,
+    ) -> None:
+        self._csv_service = csv_service or CSVService()
+        self._score_service = score_service or ScoreService(self._csv_service)
 
     async def submit(self, cpf: str, request: InterviewRequest) -> InterviewResponse:
         client = await self._csv_service.get_client_by_cpf(cpf)
@@ -28,7 +32,9 @@ class InterviewAgent:
 
         final_score = min(1000, max(0, (client.score + new_score) // 2))
 
-        await self._csv_service.update_client_score(cpf, final_score)
+        # Mantem a coluna limite_atual do CSV coerente com o novo score.
+        new_limit = await self._score_service.get_limit_for_score(final_score)
+        await self._csv_service.update_client_score(cpf, final_score, new_limit)
 
         recommendation = self._get_recommendation(final_score)
 

@@ -79,7 +79,11 @@ T:"{technical_response}"
 
 ---
 
-### 2. optimized_chat.py
+### 2. optimized_chat.py (historico)
+
+> Este agente (`/chat`) foi removido: o front-end usa apenas o orquestrador unificado
+> (`/unified/*`), que so chama o LLM quando as regras nao resolvem. As otimizacoes abaixo
+> ficam registradas como historico das decisoes de prompt.
 
 #### Contexto Base do Sistema (linhas 309-323)
 

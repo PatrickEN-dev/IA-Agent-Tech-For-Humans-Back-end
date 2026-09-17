@@ -89,6 +89,27 @@ humanizacao quando aplicavel. Em caso de timeout ou erro, o fallback e imediato.
 - **Formato brasileiro**: R$ 15.000,00
 - **Limite de tentativas** (3) na autenticacao do chat, como no endpoint `/triage/authenticate`
 - **Sessoes com TTL** e historico limitado: sem crescimento infinito de memoria
+- **Oferta respondida com valor**: depois de "Deseja solicitar aumento?", "20 mil" ja processa o pedido
+  (e "nao, 20 mil e muito" continua sendo recusa)
+- **Sessao expirada explicada**: um `session_id` desconhecido (TTL ou reinicio) recebe
+  "sua sessao anterior expirou, vamos recomecar" em vez de um pedido de CPF do nada
+- **CPF incompleto**: "encontrei so 7 digitos, o CPF tem 11" em vez de "CPF invalido"
+- **Data implausivel**: ano no futuro ou idade acima de 120 anos e apontado como erro de digitacao
+- **Lembrete de saida**: apos duas respostas seguidas nao compreendidas num fluxo, a ajuda inclui
+  "diga 'cancelar' para voltar ao menu"; `available_actions` traz `cancelar` dentro dos fluxos
+- **Resultado da entrevista** explica se o score subiu, caiu ou se manteve
+- **Mensagens longas demais** (> `MAX_MESSAGE_LENGTH`) recebem um pedido de resumo, sem erro 422
+
+## Resiliencia
+
+- Qualquer excecao dentro de `process_message` (CSV, API externa, bug) vira uma resposta de chat
+  ("tive um problema tecnico...") com a sessao preservada, em vez de um HTTP 500
+- O handler global de excecoes do FastAPI registra o traceback e devolve `{"detail": ...}` estavel
+- O bloqueio por CPF em `/triage/authenticate` expira (`AUTH_LOCKOUT_MINUTES`, 15 min por padrao):
+  antes, tres erros trancavam o CPF ate o processo reiniciar
+- Um unico conjunto de agentes/servicos e instanciado em `routes.py` e injetado no orquestrador
+  (antes cada agente criava seus proprios servicos, e o orquestrador instanciava um `TriageAgent`
+  que nunca usava)
 
 ## Melhorias de velocidade
 
@@ -118,3 +139,7 @@ As partes boas foram portadas para o orquestrador atual, coberto por `tests/test
 1. Persistir sessoes fora do processo (Redis) para escalar horizontalmente
 2. Streaming da resposta humanizada
 3. Entrevista conversacional (LLM extrai varios campos de uma frase so, com validacao deterministica)
+4. Contar tentativas de autenticacao do chat tambem por CPF (hoje e por sessao; abrir uma sessao
+   nova zera o contador)
+5. Revisar a formula da entrevista: a media com o score anterior faz perfis bons (score > ~580)
+   perderem pontos mesmo com dados excelentes, e o status `pending_analysis` nunca e produzido

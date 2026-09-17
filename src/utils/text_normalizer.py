@@ -34,6 +34,15 @@ def has_digits(text: str) -> bool:
     return any(ch.isdigit() for ch in text)
 
 
+def normalize_cpf(cpf: str) -> str:
+    """Remove pontuacao de um CPF ja informado como tal ("123.456.789-01")."""
+    return re.sub(r"\D", "", cpf)
+
+
+def count_digits(text: str) -> int:
+    return sum(1 for ch in text if ch.isdigit())
+
+
 def extract_cpf_from_text(text: str) -> Optional[str]:
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 11:

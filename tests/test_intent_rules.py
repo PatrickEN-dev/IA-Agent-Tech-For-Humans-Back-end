@@ -2,8 +2,10 @@
 
 import pytest
 
+from datetime import datetime, timezone
+
 from src.services.llm_service import LLMService
-from src.utils.formatting import format_brl
+from src.utils.formatting import format_brl, format_datetime_brt, format_rate
 from src.utils.text_normalizer import contains_word, parse_boolean_response
 from src.utils.value_extractor import (
     extract_currency_codes,
@@ -107,3 +109,16 @@ def test_format_brl() -> None:
     assert format_brl(15000) == "R$ 15.000,00"
     assert format_brl(1234567.891) == "R$ 1.234.567,89"
     assert format_brl(0.5) == "R$ 0,50"
+
+
+def test_format_rate_uses_brazilian_separators() -> None:
+    assert format_rate(5.1534) == "5,15"
+    assert format_rate(1450.0) == "1.450,00"
+    assert format_rate(0.036) == "0,0360"
+
+
+def test_format_datetime_in_brasilia_time() -> None:
+    utc_moment = datetime(2026, 9, 17, 15, 12, tzinfo=timezone.utc)
+    assert format_datetime_brt(utc_moment) == "17/09/2026 12:12"
+    naive_moment = datetime(2026, 9, 17, 15, 12)
+    assert format_datetime_brt(naive_moment) == "17/09/2026 12:12"

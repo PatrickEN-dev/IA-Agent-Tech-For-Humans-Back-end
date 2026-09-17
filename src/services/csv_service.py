@@ -63,7 +63,9 @@ class CSVService:
                     )
         return clients
 
-    async def update_client_score(self, cpf: str, new_score: int) -> bool:
+    async def update_client_score(
+        self, cpf: str, new_score: int, new_limit: float | None = None
+    ) -> bool:
         file_path = self._settings.clients_csv_path
         normalized_cpf = cpf.replace(".", "").replace("-", "")
         updated = False
@@ -82,6 +84,8 @@ class CSVService:
                     row_cpf = row.get("cpf", "").replace(".", "").replace("-", "")
                     if row_cpf == normalized_cpf:
                         row["score"] = str(new_score)
+                        if new_limit is not None and "limite_atual" in row:
+                            row["limite_atual"] = f"{new_limit:.2f}"
                         updated = True
                     rows.append(row)
 
