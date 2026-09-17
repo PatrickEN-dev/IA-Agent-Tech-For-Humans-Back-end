@@ -21,6 +21,6 @@ alembic==1.20.0
 slowapi==0.1.10
 
 # langchain 1.x: a API mudou entre 0.x e 1.x, e langchain-openai 1.6 puxa openai 3.x.
-langchain==1.2.3
+langchain==1.4.0
 langchain-openai==1.1.7
 langchain-anthropic==1.3.1
