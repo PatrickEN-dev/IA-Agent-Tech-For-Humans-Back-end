@@ -4,7 +4,7 @@
 # um conjunto que nenhum teste exercitou. E a definicao de "funciona na minha maquina".
 # O Dependabot abre PR para subir cada pino, e o CI decide se sobe.
 
-fastapi==0.128.0
+fastapi==0.141.1
 uvicorn[standard]==0.40.0
 pydantic[email]==2.12.5
 pydantic-settings==2.12.0
