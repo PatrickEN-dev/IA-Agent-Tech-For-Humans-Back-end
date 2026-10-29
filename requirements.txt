@@ -10,12 +10,12 @@ pydantic[email]==2.12.5
 pydantic-settings==2.12.0
 python-jose[cryptography]==3.5.0
 httpx==0.28.1
-python-dotenv==1.2.1
+python-dotenv==1.2.4
 
 # Persistencia: SQLite local (aiosqlite) e Postgres em producao (asyncpg).
 sqlalchemy[asyncio]==2.0.54
 aiosqlite==0.22.1
-alembic==1.20.0
+alembic==1.20.1
 
 # Rate limit por IP em /unified/chat, /triage/authenticate e /signup.
 slowapi==0.1.10
